@@ -1,6 +1,7 @@
 package com.example.carniceriaapp20.ui.screens.tpv
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -45,7 +46,7 @@ fun TpvScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var menuExpanded by remember { mutableStateOf(false) }
 
-    val bluetoothPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    val bluetoothPrintPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         rememberMultiplePermissionsState(
             permissions = listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
         )
@@ -78,6 +79,15 @@ fun TpvScreen(
                             onDismissRequest = { menuExpanded = false }
                         ) {
                             DropdownMenuItem(
+                                text = { Text("Gestionar Productos") },
+                                onClick = {
+                                    navController.navigate(Routes.PRODUCT_LIST)
+                                    menuExpanded = false
+                                },
+                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                            )
+                            Divider()
+                            DropdownMenuItem(
                                 text = { Text("Historial de Tickets") },
                                 onClick = { 
                                     navController.navigate(Routes.HISTORY)
@@ -102,9 +112,9 @@ fun TpvScreen(
                                 leadingIcon = { Icon(Icons.Default.SystemUpdate, contentDescription = null) }
                             )
                              DropdownMenuItem(
-                                text = { Text("Configuración") },
+                                text = { Text("Configurar Impresora") },
                                 onClick = { 
-                                    navController.navigate(Routes.SETTINGS)
+                                    viewModel.onSettingsClick()
                                     menuExpanded = false
                                 },
                                 leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) }
@@ -132,12 +142,14 @@ fun TpvScreen(
                     uiState = uiState,
                     onSelectItem = viewModel::onSelectItem,
                     onRemoveItem = viewModel::removeItemFromCart,
+                    onIncrementItem = viewModel::incrementCartItemQuantity,
+                    onDecrementItem = viewModel::decrementCartItemQuantity,
                     onAddTicket = viewModel::addTicket,
                     onCloseTicket = viewModel::closeTicket,
                     onSetActiveTicket = viewModel::setActiveTicket,
                     onFinalizeSale = {
-                        if (!bluetoothPermissions.allPermissionsGranted) {
-                            bluetoothPermissions.launchMultiplePermissionRequest()
+                        if (!bluetoothPrintPermissions.allPermissionsGranted) {
+                            bluetoothPrintPermissions.launchMultiplePermissionRequest()
                         } else {
                             viewModel.onFinalizeSaleClick()
                         }
@@ -173,8 +185,17 @@ fun TpvScreen(
             onDismiss = viewModel::onDismissNoPrinterDialog,
             onGoToSettings = { 
                 viewModel.onDismissNoPrinterDialog()
-                navController.navigate(Routes.SETTINGS) 
+                viewModel.onSettingsClick()
             }
+        )
+    }
+
+    if (uiState.showSettingsDialog) {
+        SettingsDialog(
+            uiState = uiState,
+            onDismiss = viewModel::onDismissSettingsDialog,
+            onSelectPrinter = viewModel::selectPrinter,
+            onRefreshDevices = viewModel::refreshPairedDevices
         )
     }
 }
@@ -188,7 +209,6 @@ fun ProductCatalogPanel(
 ) {
     var expandedState by rememberSaveable { mutableStateOf(mapOf<String, Boolean>()) }
 
-    // If a search is active, all groups should be expanded
     val isSearchActive = uiState.searchQuery.isNotBlank()
 
     Column(modifier = modifier.padding(horizontal = 8.dp)) {
@@ -209,10 +229,10 @@ fun ProductCatalogPanel(
         LazyColumn {
             uiState.filteredProducts.forEach { (department, products) ->
                 item {
-                    val isExpanded = expandedState.getOrDefault(department, true)
+                    val isExpanded = expandedState.getOrDefault(department, false)
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable { 
-                            if (!isSearchActive) { // Only allow manual collapse if not searching
+                            if (!isSearchActive) {
                                 expandedState = expandedState + (department to !isExpanded) 
                             }
                         }.padding(vertical = 8.dp),
@@ -226,7 +246,7 @@ fun ProductCatalogPanel(
                         Text(text = department, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
                 }
-                if (isSearchActive || expandedState.getOrDefault(department, true)) {
+                if (isSearchActive || expandedState.getOrDefault(department, false)) {
                     items(products) { product ->
                         Card(
                             onClick = { onProductClick(product) }, 
@@ -248,6 +268,8 @@ fun TicketManagementPanel(
     uiState: TpvUiState,
     onSelectItem: (CartItem?) -> Unit,
     onRemoveItem: (CartItem) -> Unit,
+    onIncrementItem: (CartItem) -> Unit,
+    onDecrementItem: (CartItem) -> Unit,
     onAddTicket: () -> Unit,
     onCloseTicket: (Int) -> Unit,
     onSetActiveTicket: (Int) -> Unit,
@@ -283,7 +305,9 @@ fun TicketManagementPanel(
                     onClick = { 
                         if (uiState.selectedCartItem == item) onSelectItem(null) else onSelectItem(item)
                     },
-                    onRemove = { onRemoveItem(item) }
+                    onRemove = { onRemoveItem(item) },
+                    onIncrement = { onIncrementItem(item) },
+                    onDecrement = { onDecrementItem(item) }
                 )
                 Divider(color = MaterialTheme.colorScheme.outlineVariant)
             }
@@ -322,7 +346,7 @@ fun KeypadWithActionsPanel(
             onValueChange = {},
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text(if (selectedItem != null) "Editando: ${selectedItem.product.name}" else "Seleccione un producto para editar") },
-            textStyle = MaterialTheme.typography.headlineSmall.copy(textAlign = TextAlign.End),
+            textStyle = MaterialTheme.typography.headlineSmall.copy(textAlign = TextAlign.Center),
             readOnly = true,
             trailingIcon = {
                 IconButton(onClick = onBackspace) {
@@ -379,7 +403,14 @@ fun KeypadWithActionsPanel(
 }
 
 @Composable
-fun CartItemRow(item: CartItem, isSelected: Boolean, onClick: () -> Unit, onRemove: () -> Unit) {
+fun CartItemRow(
+    item: CartItem, 
+    isSelected: Boolean, 
+    onClick: () -> Unit, 
+    onRemove: () -> Unit,
+    onIncrement: () -> Unit,
+    onDecrement: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -396,6 +427,15 @@ fun CartItemRow(item: CartItem, isSelected: Boolean, onClick: () -> Unit, onRemo
                 "${item.quantity.toInt()} x $${item.product.price}"
             }
             Text(desc)
+        }
+        if (item.product.unit == ProductUnit.UNIDAD) {
+            IconButton(onClick = onDecrement, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.RemoveCircle, contentDescription = "Quitar 1", tint = MaterialTheme.colorScheme.secondary)
+            }
+            IconButton(onClick = onIncrement, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.AddCircle, contentDescription = "Añadir 1", tint = MaterialTheme.colorScheme.secondary)
+            }
+            Spacer(modifier = Modifier.width(8.dp))
         }
         Text("$" + "%.2f".format(item.totalPrice), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         Spacer(modifier = Modifier.width(8.dp))
@@ -442,5 +482,84 @@ fun NoPrinterDialog(onDismiss: () -> Unit, onGoToSettings: () -> Unit) {
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
+}
+
+@OptIn(ExperimentalPermissionsApi::class)
+@SuppressLint("MissingPermission")
+@Composable
+fun SettingsDialog(
+    uiState: TpvUiState,
+    onDismiss: () -> Unit,
+    onSelectPrinter: (String) -> Unit,
+    onRefreshDevices: () -> Unit
+) {
+    val bluetoothPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        rememberMultiplePermissionsState(
+            permissions = listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+        )
+    } else {
+        rememberMultiplePermissionsState(permissions = emptyList())
+    }
+
+    LaunchedEffect(key1 = bluetoothPermissions.allPermissionsGranted) {
+        if (bluetoothPermissions.allPermissionsGranted) {
+            onRefreshDevices()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Configurar Impresora") },
+        text = {
+            Column {
+                if (!bluetoothPermissions.allPermissionsGranted) {
+                    Text("Se necesitan permisos de Bluetooth para buscar impresoras.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = { bluetoothPermissions.launchMultiplePermissionRequest() }) {
+                        Text("Otorgar Permisos")
+                    }
+                } else {
+                    if (uiState.pairedDevices.isEmpty()) {
+                        Text("No se encontraron impresoras vinculadas. Asegúrese de que la impresora esté encendida y vinculada al dispositivo.")
+                    } else {
+                        LazyColumn {
+                            items(uiState.pairedDevices) { device ->
+                                val isSelected = uiState.selectedPrinterMac == device.second
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onSelectPrinter(device.second) }
+                                        .padding(vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(device.first, modifier = Modifier.weight(1f))
+                                    if (isSelected) {
+                                        Icon(Icons.Default.Check, contentDescription = "Seleccionado", tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cerrar")
+            }
+        },
+        dismissButton = {
+            IconButton(onClick = {
+                if (!bluetoothPermissions.allPermissionsGranted) {
+                    bluetoothPermissions.launchMultiplePermissionRequest()
+                } else {
+                    onRefreshDevices()
+                }
+            }) {
+                Icon(Icons.Default.Refresh, contentDescription = "Refrescar")
+            }
+        }
     )
 }

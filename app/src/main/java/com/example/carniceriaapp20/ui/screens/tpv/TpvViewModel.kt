@@ -1,5 +1,6 @@
 package com.example.carniceriaapp20.ui.screens.tpv
 
+import android.annotation.SuppressLint
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.carniceriaapp20.data.local.Product
@@ -46,7 +47,11 @@ data class TpvUiState(
     val showNoPrinterDialog: Boolean = false,
     val selectedCartItem: CartItem? = null,
     val keypadInput: String = "",
-    val printResult: PrintResult? = null
+    val printResult: PrintResult? = null,
+    // Settings Dialog State
+    val showSettingsDialog: Boolean = false,
+    val pairedDevices: List<Pair<String, String>> = emptyList(),
+    val selectedPrinterMac: String? = null
 ) {
     val activeTicket: TicketState
         get() = tickets.getOrElse(activeTicketIndex) { tickets.first() }
@@ -80,13 +85,18 @@ class TpvViewModel @Inject constructor(
     private val _selectedCartItem = MutableStateFlow<CartItem?>(null)
     private val _keypadInput = MutableStateFlow("")
     private val _printResult = MutableStateFlow<PrintResult?>(null)
+    // Settings Dialog State
+    private val _showSettingsDialog = MutableStateFlow(false)
+    private val _pairedDevices = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    private val _selectedPrinterMac = userPreferencesRepository.printerMacAddress
+
 
     val uiState: StateFlow<TpvUiState> = combine(
         productRepository.getAllProducts(),
         _searchQuery,
         _tickets,
         _activeTicketIndex,
-        _showConfirmSaleDialog
+        _showConfirmSaleDialog,
     ) { allProducts, query, tickets, activeIndex, showDialog ->
         TpvUiState(
             allProducts = allProducts,
@@ -103,12 +113,19 @@ class TpvViewModel @Inject constructor(
         uiState.copy(keypadInput = keypad)
     }.combine(_printResult) { uiState, printResult ->
         uiState.copy(printResult = printResult)
+    }.combine(_showSettingsDialog) { uiState, showSettings ->
+        uiState.copy(showSettingsDialog = showSettings)
+    }.combine(_pairedDevices) { uiState, devices ->
+        uiState.copy(pairedDevices = devices)
+    }.combine(_selectedPrinterMac) { uiState, selectedMac ->
+        uiState.copy(selectedPrinterMac = selectedMac)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = TpvUiState()
     )
 
+    // TPV Logic
     fun onSearchQueryChange(query: String) {
         _searchQuery.value = query
     }
@@ -131,6 +148,41 @@ class TpvViewModel @Inject constructor(
         currentTickets[uiState.value.activeTicketIndex] = activeTicket.copy(items = newItems)
         _tickets.value = currentTickets
         onSearchQueryChange("")
+    }
+
+    fun incrementCartItemQuantity(item: CartItem) {
+        if (item.product.unit != ProductUnit.UNIDAD) return
+
+        val currentTickets = _tickets.value.toMutableList()
+        val activeTicket = uiState.value.activeTicket
+        val newItems = activeTicket.items.toMutableList()
+
+        val itemIndex = newItems.indexOf(item)
+        if (itemIndex != -1) {
+            val updatedItem = item.copy(quantity = item.quantity + 1)
+            newItems[itemIndex] = updatedItem
+            currentTickets[uiState.value.activeTicketIndex] = activeTicket.copy(items = newItems)
+            _tickets.value = currentTickets
+        }
+    }
+
+    fun decrementCartItemQuantity(item: CartItem) {
+        if (item.product.unit != ProductUnit.UNIDAD) return
+
+        if (item.quantity > 1) {
+            val currentTickets = _tickets.value.toMutableList()
+            val activeTicket = uiState.value.activeTicket
+            val newItems = activeTicket.items.toMutableList()
+            val itemIndex = newItems.indexOf(item)
+            if (itemIndex != -1) {
+                val updatedItem = item.copy(quantity = item.quantity - 1)
+                newItems[itemIndex] = updatedItem
+                currentTickets[uiState.value.activeTicketIndex] = activeTicket.copy(items = newItems)
+                _tickets.value = currentTickets
+            }
+        } else {
+            removeItemFromCart(item)
+        }
     }
 
     fun removeItemFromCart(item: CartItem) {
@@ -337,6 +389,30 @@ class TpvViewModel @Inject constructor(
             } else {
                  _printResult.value = PrintResult.Error("No hay ningún ticket para reimprimir.")
             }
+        }
+    }
+
+    // Settings Logic
+    fun onSettingsClick() {
+        refreshPairedDevices()
+        _showSettingsDialog.value = true
+    }
+
+    fun onDismissSettingsDialog() {
+        _showSettingsDialog.value = false
+    }
+
+    @SuppressLint("MissingPermission")
+    fun refreshPairedDevices() {
+        val devices = printerHelper.getPairedDevices()?.map { 
+            it.name to it.address 
+        } ?: emptyList()
+        _pairedDevices.value = devices
+    }
+
+    fun selectPrinter(macAddress: String) {
+        viewModelScope.launch {
+            userPreferencesRepository.savePrinterMacAddress(macAddress)
         }
     }
 }

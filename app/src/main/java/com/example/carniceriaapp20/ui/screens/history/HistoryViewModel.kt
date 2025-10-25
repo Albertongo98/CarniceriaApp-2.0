@@ -14,6 +14,7 @@ import com.example.carniceriaapp20.util.BluetoothPrinterHelper
 import com.example.carniceriaapp20.util.PrintResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -84,7 +85,7 @@ class HistoryViewModel @Inject constructor(
         if (selectedTickets.isEmpty()) return
 
         viewModelScope.launch {
-            var finalResult: PrintResult? = null
+            var finalResult: PrintResult = PrintResult.Success
             withContext(Dispatchers.IO) {
                 for (ticketWithItems in selectedTickets) {
                     val cartItems = ticketWithItems.items.map { ticketItem ->
@@ -103,11 +104,21 @@ class HistoryViewModel @Inject constructor(
                         )
                     }
                     
-                    finalResult = printerHelper.printTicket(
+                    val printJobResult = printerHelper.printTicket(
                         ticket = ticketWithItems.ticket,
                         items = cartItems,
-                        folio = ticketWithItems.ticket.id.toString()
+                        folio = ticketWithItems.ticket.id.toString(),
+                        withLogo = false
                     )
+
+                    if (printJobResult is PrintResult.Success) {
+                        val dynamicDelay = 1000L + (cartItems.size * 600L)
+                        delay(dynamicDelay)
+                        printerHelper.flushPrinter()
+                    } else {
+                        finalResult = printJobResult // If any ticket fails, report the error and stop.
+                        break
+                    }
                 }
             }
             _printResult.value = finalResult

@@ -41,10 +41,17 @@ fun LabelGeneratorScreen(
         }
     }
 
+    if (uiState.showQuantityDialog) {
+        QuantityPromptDialog(
+            onDismiss = { viewModel.dismissQuantityDialog() },
+            onConfirm = { quantity -> viewModel.printLabels(quantity) }
+        )
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(onClick = { viewModel.toggleFormVisibility() }) {
+            FloatingActionButton(onClick = { viewModel.showPrintNewDialog() }) {
                 Icon(Icons.Default.Add, contentDescription = "Nueva Etiqueta")
             }
         }
@@ -55,10 +62,9 @@ fun LabelGeneratorScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            AnimatedVisibility(visible = uiState.isFormVisible) {
-                NewLabelForm(uiState = uiState, viewModel = viewModel)
-            }
-
+            
+            NewLabelForm(uiState = uiState, viewModel = viewModel)
+            
             Text("Historial de Etiquetas", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(vertical = 8.dp))
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -69,6 +75,40 @@ fun LabelGeneratorScreen(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun QuantityPromptDialog(onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
+    var quantity by remember { mutableStateOf("1") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Cantidad de Etiquetas") },
+        text = {
+            OutlinedTextField(
+                value = quantity,
+                onValueChange = { value ->
+                    if (value.all { it.isDigit() }) {
+                        quantity = value
+                    }
+                },
+                label = { Text("¿Cuántas copias?") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(quantity.toIntOrNull() ?: 1) }) {
+                Text("Imprimir")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
 }
 
 @Composable
@@ -103,7 +143,7 @@ fun NewLabelForm(
             )
             
             Button(
-                onClick = { viewModel.printNewLabel() },
+                onClick = { viewModel.showPrintNewDialog() },
                 modifier = Modifier.align(Alignment.End).padding(top = 8.dp)
             ) {
                 Text("Imprimir")
@@ -120,7 +160,7 @@ fun LabelHistoryItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { viewModel.reprintLabel(label) }
+            .clickable { viewModel.showReprintDialog(label) }
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -130,7 +170,7 @@ fun LabelHistoryItem(
             Text("Código: ${label.code} | Precio: ${label.price}", style = MaterialTheme.typography.bodySmall)
         }
         Row {
-            IconButton(onClick = { viewModel.reprintLabel(label) }) {
+            IconButton(onClick = { viewModel.showReprintDialog(label) }) {
                 Icon(Icons.Default.Print, contentDescription = "Reimprimir")
             }
             IconButton(onClick = { viewModel.deleteLabelFromHistory(label) }) {
