@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <!-- El color de fondo que quieres ver durante el arranque frío -->
+        <item name="windowSplashScreenBackground">#FFFBEA</item> <!-- PalmaBeigeClaro -->
+
+        <!-- Tu logo (debe ser un icono adaptable o drawable) -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/logo_color</item>
+
+        <!-- El tema al que debe cambiar una vez cargada la app -->
+        <item name="postSplashScreenTheme">@style/Theme.CarniceriaApp20</item>
+    </style>
+</resources>

@@ -13,5 +13,8 @@ data class Ticket(
     val timestamp: Long,
 
     @ColumnInfo(name = "total_amount")
-    val totalAmount: Double
+    val totalAmount: Double,
+
+    @ColumnInfo(name = "daily_folio")
+    val dailyFolio: Int = 0 // Nuevo campo para el folio 001, 002...
 )

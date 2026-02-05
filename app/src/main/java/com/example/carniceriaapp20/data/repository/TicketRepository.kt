@@ -13,5 +13,9 @@ interface TicketRepository {
 
     suspend fun getLastTicket(): Ticket?
 
-    fun getTicketWithItems(ticketId: Long): Flow<TicketWithItems?> // Added this line
+    fun getTicketWithItems(ticketId: Long): Flow<TicketWithItems?>
+
+    suspend fun deleteTicketsOlderThan(threshold: Long)
+
+    suspend fun countTicketsOfDay(startOfDay: Long): Int
 }

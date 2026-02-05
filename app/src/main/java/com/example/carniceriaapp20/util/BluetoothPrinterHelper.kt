@@ -24,6 +24,8 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.OutputStream
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
@@ -75,6 +77,7 @@ class BluetoothPrinterHelper @Inject constructor(
         val charset = Charsets.ISO_8859_1
         val localeMexico = Locale.forLanguageTag("es-MX")
         val currencyFormat = NumberFormat.getCurrencyInstance(localeMexico)
+        val fullDateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", localeMexico)
 
         try {
             val outputStream = ByteArrayOutputStream().apply {
@@ -83,13 +86,17 @@ class BluetoothPrinterHelper @Inject constructor(
                 write(CMD_ALIGN_CENTER)
                 write("--------------------------------\n".toByteArray(charset))
                 
+                // Fecha y Hora en la parte superior
+                write(("${fullDateFormat.format(Date(ticket.timestamp))}\n").toByteArray(charset))
+                write("--------------------------------\n".toByteArray(charset))
+                
                 write(CMD_ALIGN_LEFT)
                 items.forEach { item ->
                     write(CMD_BOLD_ON)
-                    write((item.product.name + "\n").toByteArray(charset))
+                    val productCode = item.product.code.padStart(4, '0')
+                    write(("${item.product.name} ($productCode)\n").toByteArray(charset))
                     write(CMD_BOLD_OFF)
 
-                    // VISIBILIDAD MEJORADA DE PIEZAS (Solo si es más de 1)
                     if (item.product.unit == ProductUnit.UNIDAD && item.quantity > 1) {
                         write(CMD_ALIGN_CENTER)
                         write(CMD_BOLD_ON)
@@ -127,6 +134,10 @@ class BluetoothPrinterHelper @Inject constructor(
                 
                 val internalCodeData = generarCodigoControlInterno(ticket.timestamp, folio, ticket.totalAmount)
                 printQrCode(this, internalCodeData)
+                
+                // Imprimimos la cadena del QR en texto para que sea "legible" al ojo humano
+                write(("\n$internalCodeData\n").toByteArray(charset))
+                
                 write("\n¡GRACIAS POR SU COMPRA!\n".toByteArray(charset))
                 
                 write(CMD_FEED_AND_CUT)
@@ -178,7 +189,7 @@ class BluetoothPrinterHelper @Inject constructor(
                 write(data)
                 flush()
             }
-            Thread.sleep(800) // Aumentamos la pausa para asegurar la entrega total antes de cerrar
+            Thread.sleep(800)
             return PrintResult.Success
         } catch (e: Exception) {
             return PrintResult.Error("Error BT: ${e.message}")

@@ -26,16 +26,17 @@ Este documento establece las reglas, principios y funciones críticas para el de
 
 ## 3. Plan de Trabajo (Post-Reparación)
 
-*   [x] **1. Reparar Compilación del Proyecto:**
-    *   Se actualizaron las dependencias de Gradle y se corrigieron errores de tipos.
+*   [x] **1. Reparar Compilación del Proyecto.**
 *   [x] **2. Implementar Indicador de Carga en Botón de Impresión.**
 *   [x] **3. Corregir Reimpresión en Historial.**
 *   [x] **4. Ajustes de Impresión de Ticket (Logo y QR).**
 *   [x] **5. Refactorización de UI y Teclado Inteligente (Smart Keyboard):**
-    *   Rediseño visual con colores de marca y optimización de espacios para Tablet.
-    *   Implementación de sugerencias dinámicas basadas en productos más vendidos (Top 10).
-    *   Fila de importes rápidos ($5 a $100) para agilizar el pesado por dinero.
-    *   Corrección de error fatal (crash) por duplicidad de llaves en la lista del ticket.
+    *   Rediseño visual optimizado para Tablet.
+    *   Sugerencias dinámicas (Top 10 ventas) e importes rápidos ($5-$100).
+    *   Solución a crash por duplicidad de ítems en ticket.
+*   [x] **6. Automatización y Mantenimiento (Offline-First):**
+    *   Reinicio automático de folios diarios (001, 002...).
+    *   Limpieza automática de tickets mayores a 48 horas al arrancar la app.
 
 ## 4. Gestión del Proyecto
 

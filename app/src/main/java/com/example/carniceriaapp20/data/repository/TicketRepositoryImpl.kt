@@ -29,4 +29,12 @@ class TicketRepositoryImpl @Inject constructor(
     override fun getTicketWithItems(ticketId: Long): Flow<TicketWithItems?> {
         return ticketDao.getTicketWithItems(ticketId)
     }
+
+    override suspend fun deleteTicketsOlderThan(threshold: Long) {
+        ticketDao.deleteTicketsOlderThan(threshold)
+    }
+
+    override suspend fun countTicketsOfDay(startOfDay: Long): Int {
+        return ticketDao.countTicketsOfDay(startOfDay)
+    }
 }

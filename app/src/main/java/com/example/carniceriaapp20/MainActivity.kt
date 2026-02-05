@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import com.example.carniceriaapp20.ui.navigation.AppNavigation
 import com.example.carniceriaapp20.ui.theme.CarniceriaApp20Theme
@@ -15,7 +16,11 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Instalamos la Splash Screen oficial de Android antes de super.onCreate
+        installSplashScreen()
+        
         super.onCreate(savedInstanceState)
+
         // Set the app to be edge-to-edge for an immersive experience
         WindowCompat.setDecorFitsSystemWindows(window, false)
 

@@ -13,8 +13,10 @@ import com.example.carniceriaapp20.ui.screens.products.ProductListScreen
 import com.example.carniceriaapp20.ui.screens.settings.SettingsScreen
 import com.example.carniceriaapp20.ui.screens.tpv.TpvScreen
 import com.example.carniceriaapp20.ui.screens.update.UpdateFromCsvScreen
+import com.example.carniceriaapp20.ui.screens.splash.SplashScreen
 
 object Routes {
+    const val SPLASH = "splash"
     const val TPV = "tpv"
     const val PRODUCT_LIST = "product_list"
     const val ADD_EDIT_PRODUCT = "add_edit_product"
@@ -28,7 +30,15 @@ object Routes {
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = Routes.TPV) {
+    NavHost(navController = navController, startDestination = Routes.SPLASH) {
+        composable(Routes.SPLASH) {
+            SplashScreen(onTimeout = {
+                navController.navigate(Routes.TPV) {
+                    // Eliminamos el splash del historial para que no se pueda volver atrás con el botón de la tablet
+                    popUpTo(Routes.SPLASH) { inclusive = true }
+                }
+            })
+        }
         composable(Routes.TPV) {
             TpvScreen(navController = navController)
         }
