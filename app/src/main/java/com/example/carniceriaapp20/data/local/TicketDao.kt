@@ -23,4 +23,21 @@ interface TicketDao {
 
     @Query("SELECT * FROM tickets ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLastTicket(): Ticket?
+
+    /**
+     * Obtiene los productos más vendidos uniendo los ítems de tickets con la tabla de productos.
+     * Los ordena por la suma total de cantidad vendida.
+     * Corregido: se usa 'product_code' que es el nombre real de la columna en la BD.
+     */
+    @Query("""
+        SELECT p.* FROM products p
+        INNER JOIN (
+            SELECT product_code, SUM(quantity) as totalQty 
+            FROM ticket_items 
+            GROUP BY product_code
+        ) v ON p.code = v.product_code
+        ORDER BY v.totalQty DESC
+        LIMIT 10
+    """)
+    fun getTopSellingProducts(): Flow<List<Product>>
 }

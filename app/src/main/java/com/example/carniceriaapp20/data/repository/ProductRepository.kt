@@ -16,4 +16,6 @@ interface ProductRepository {
     suspend fun deleteProduct(product: Product)
 
     suspend fun deleteAllProducts()
+
+    fun getTopSellingProducts(): Flow<List<Product>>
 }

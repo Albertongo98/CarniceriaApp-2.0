@@ -20,54 +20,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
-// Data classes for UI State
-data class CartItem(
-    val product: Product,
-    var quantity: Double = 1.0,
-    var customPrice: Double? = null // For GRANEL products, manual total price
-) {
-    val totalPrice: Double
-        get() = customPrice ?: (product.price * quantity)
-}
-
-data class TicketState(
-    val id: Int,
-    val items: List<CartItem> = emptyList()
-) {
-    val total: Double
-        get() = items.sumOf { it.totalPrice }
-}
-
-data class TpvUiState(
-    val allProducts: List<Product> = emptyList(),
-    val searchQuery: String = "",
-    val tickets: List<TicketState> = listOf(TicketState(id = 1)),
-    val activeTicketIndex: Int = 0,
-    val showConfirmSaleDialog: Boolean = false,
-    val showNoPrinterDialog: Boolean = false,
-    val selectedCartItem: CartItem? = null,
-    val keypadInput: String = "",
-    val printResult: PrintResult? = null,
-    // Settings Dialog State
-    val showSettingsDialog: Boolean = false,
-    val pairedDevices: List<Pair<String, String>> = emptyList(),
-    val selectedPrinterMac: String? = null
-) {
-    val activeTicket: TicketState
-        get() = tickets.getOrElse(activeTicketIndex) { tickets.first() }
-
-    val filteredProducts: Map<String, List<Product>>
-        get() = allProducts
-            .filter { 
-                it.name.contains(searchQuery, ignoreCase = true) || 
-                it.code.contains(searchQuery, ignoreCase = true) 
-            }
-            .groupBy { it.department }
-    
-    val topSellingProducts: List<Product>
-        get() = allProducts.take(10) // Placeholder for actual top selling logic
-}
-
 @HiltViewModel
 class TpvViewModel @Inject constructor(
     private val productRepository: ProductRepository,
@@ -85,123 +37,79 @@ class TpvViewModel @Inject constructor(
     private val _selectedCartItem = MutableStateFlow<CartItem?>(null)
     private val _keypadInput = MutableStateFlow("")
     private val _printResult = MutableStateFlow<PrintResult?>(null)
-    // Settings Dialog State
+    private val _activeKeyboard = MutableStateFlow(KeyboardType.NUMERIC)
+    private val _isPrinting = MutableStateFlow(false)
     private val _showSettingsDialog = MutableStateFlow(false)
     private val _pairedDevices = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     private val _selectedPrinterMac = userPreferencesRepository.printerMacAddress
 
+    private val _fastProducts = productRepository.getTopSellingProducts()
 
     val uiState: StateFlow<TpvUiState> = combine(
         productRepository.getAllProducts(),
         _searchQuery,
         _tickets,
         _activeTicketIndex,
-        _showConfirmSaleDialog,
-    ) { allProducts, query, tickets, activeIndex, showDialog ->
+        _selectedCartItem
+    ) { allProducts, query, tickets, activeIndex, selectedItem ->
         TpvUiState(
-            allProducts = allProducts,
+            filteredProducts = allProducts
+                .filter { it.name.contains(query, ignoreCase = true) || it.code.contains(query, ignoreCase = true) }
+                .groupBy { it.department },
             searchQuery = query,
             tickets = tickets,
             activeTicketIndex = activeIndex,
-            showConfirmSaleDialog = showDialog
+            selectedCartItem = selectedItem
         )
-    }.combine(_showNoPrinterDialog) { uiState, showNoPrinter ->
-        uiState.copy(showNoPrinterDialog = showNoPrinter)
-    }.combine(_selectedCartItem) { uiState, selected ->
-        uiState.copy(selectedCartItem = selected)
-    }.combine(_keypadInput) { uiState, keypad ->
-        uiState.copy(keypadInput = keypad)
-    }.combine(_printResult) { uiState, printResult ->
-        uiState.copy(printResult = printResult)
-    }.combine(_showSettingsDialog) { uiState, showSettings ->
-        uiState.copy(showSettingsDialog = showSettings)
-    }.combine(_pairedDevices) { uiState, devices ->
-        uiState.copy(pairedDevices = devices)
-    }.combine(_selectedPrinterMac) { uiState, selectedMac ->
-        uiState.copy(selectedPrinterMac = selectedMac)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = TpvUiState()
-    )
+    }.combine(_fastProducts) { state, fast -> state.copy(fastProducts = fast) }
+     .combine(_keypadInput) { state, keypad -> state.copy(keypadInput = keypad) }
+     .combine(_activeKeyboard) { state, kb -> state.copy(activeKeyboard = kb) }
+     .combine(_isPrinting) { state, printing -> state.copy(isPrinting = printing) }
+     .combine(_showConfirmSaleDialog) { state, show -> state.copy(showConfirmSaleDialog = show) }
+     .combine(_showNoPrinterDialog) { state, show -> state.copy(showNoPrinterDialog = show) }
+     .combine(_showSettingsDialog) { state, show -> state.copy(showSettingsDialog = show) }
+     .combine(_pairedDevices) { state, devices -> state.copy(pairedDevices = devices) }
+     .combine(_selectedPrinterMac) { state, mac -> state.copy(selectedPrinterMac = mac) }
+     .combine(_printResult) { state, result -> state.copy(printResult = result) }
+     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TpvUiState())
 
-    // TPV Logic
-    fun onSearchQueryChange(query: String) {
-        _searchQuery.value = query
-    }
-
-    fun addProductToCart(product: Product) {
-        val currentTickets = _tickets.value.toMutableList()
-        val activeTicket = uiState.value.activeTicket
-        val newItems = activeTicket.items.toMutableList()
-
-        val existingItem = newItems.find { it.product.code == product.code && it.product.unit == ProductUnit.UNIDAD }
-
-        if (existingItem != null) {
-            val updatedItem = existingItem.copy(quantity = existingItem.quantity + 1)
-            val itemIndex = newItems.indexOf(existingItem)
-            newItems[itemIndex] = updatedItem
-        } else {
-            newItems.add(CartItem(product = product))
+    fun onQwertyKeyPress(key: String) {
+        when (key) {
+            "BACKSPACE" -> {
+                if (_searchQuery.value.isNotEmpty()) {
+                    _searchQuery.value = _searchQuery.value.dropLast(1)
+                }
+            }
+            " " -> _searchQuery.value += " "
+            else -> _searchQuery.value += key
         }
-
-        currentTickets[uiState.value.activeTicketIndex] = activeTicket.copy(items = newItems)
-        _tickets.value = currentTickets
-        onSearchQueryChange("")
     }
 
-    fun incrementCartItemQuantity(item: CartItem) {
-        if (item.product.unit != ProductUnit.UNIDAD) return
-
+    fun applyQuickAmount(amount: Double) {
         val currentTickets = _tickets.value.toMutableList()
-        val activeTicket = uiState.value.activeTicket
+        val activeIndex = _activeTicketIndex.value
+        val activeTicket = currentTickets[activeIndex]
+        
+        // El objetivo es el ítem seleccionado, o si no hay ninguno, el último del ticket
+        val targetItem = _selectedCartItem.value ?: activeTicket.items.lastOrNull() ?: return
+        
         val newItems = activeTicket.items.toMutableList()
-
-        val itemIndex = newItems.indexOf(item)
+        val itemIndex = newItems.indexOf(targetItem)
+        
         if (itemIndex != -1) {
-            val updatedItem = item.copy(quantity = item.quantity + 1)
+            val updatedItem = if (targetItem.product.unit == ProductUnit.GRANEL) {
+                val newQuantity = if (targetItem.product.price > 0) amount / targetItem.product.price else 1.0
+                targetItem.copy(customPrice = amount, quantity = newQuantity)
+            } else {
+                // Para productos por pieza, calculamos cuántas piezas completas caben en ese dinero
+                val newQuantity = if (targetItem.product.price > 0) (amount / targetItem.product.price).toInt().toDouble().coerceAtLeast(1.0) else 1.0
+                targetItem.copy(quantity = newQuantity, customPrice = null)
+            }
             newItems[itemIndex] = updatedItem
-            currentTickets[uiState.value.activeTicketIndex] = activeTicket.copy(items = newItems)
+            currentTickets[activeIndex] = activeTicket.copy(items = newItems)
             _tickets.value = currentTickets
         }
-    }
-
-    fun decrementCartItemQuantity(item: CartItem) {
-        if (item.product.unit != ProductUnit.UNIDAD) return
-
-        if (item.quantity > 1) {
-            val currentTickets = _tickets.value.toMutableList()
-            val activeTicket = uiState.value.activeTicket
-            val newItems = activeTicket.items.toMutableList()
-            val itemIndex = newItems.indexOf(item)
-            if (itemIndex != -1) {
-                val updatedItem = item.copy(quantity = item.quantity - 1)
-                newItems[itemIndex] = updatedItem
-                currentTickets[uiState.value.activeTicketIndex] = activeTicket.copy(items = newItems)
-                _tickets.value = currentTickets
-            }
-        } else {
-            removeItemFromCart(item)
-        }
-    }
-
-    fun removeItemFromCart(item: CartItem) {
-        if (_selectedCartItem.value == item) {
-            onSelectItem(null)
-        }
-        val currentTickets = _tickets.value.toMutableList()
-        val activeTicket = uiState.value.activeTicket
-        val newItems = activeTicket.items.toMutableList()
-
-        newItems.remove(item)
-
-        currentTickets[uiState.value.activeTicketIndex] = activeTicket.copy(items = newItems)
-        _tickets.value = currentTickets
-    }
-
-    fun onSelectItem(item: CartItem?) {
-        _selectedCartItem.value = item
-        _keypadInput.value = ""
+        onSelectItem(null) // Cerramos cualquier selección tras aplicar
     }
 
     fun onKeypadInput(key: String) {
@@ -213,32 +121,64 @@ class TpvViewModel @Inject constructor(
     }
 
     fun onKeypadBackspace() {
-        _keypadInput.value = _keypadInput.value.dropLast(1)
+        if (_keypadInput.value.isNotEmpty()) {
+            _keypadInput.value = _keypadInput.value.dropLast(1)
+        }
     }
 
     fun onApplyKeypadInput(isPrice: Boolean) {
         val inputAsDouble = _keypadInput.value.toDoubleOrNull() ?: return
         val selectedItem = _selectedCartItem.value ?: return
-
+        
         val currentTickets = _tickets.value.toMutableList()
-        val activeTicket = uiState.value.activeTicket
+        val activeTicketIndex = _activeTicketIndex.value
+        val activeTicket = currentTickets[activeTicketIndex]
         val newItems = activeTicket.items.toMutableList()
         val itemIndex = newItems.indexOf(selectedItem)
-
+        
         if (itemIndex != -1) {
             val updatedItem = if (isPrice && selectedItem.product.unit == ProductUnit.GRANEL) {
-                val newQuantity = if (selectedItem.product.price > 0) {
-                    inputAsDouble / selectedItem.product.price
-                } else { 1.0 } // Avoid division by zero
+                val newQuantity = if (selectedItem.product.price > 0) inputAsDouble / selectedItem.product.price else 1.0
                 selectedItem.copy(customPrice = inputAsDouble, quantity = newQuantity)
             } else {
                 selectedItem.copy(quantity = inputAsDouble, customPrice = null)
             }
             newItems[itemIndex] = updatedItem
-            currentTickets[uiState.value.activeTicketIndex] = activeTicket.copy(items = newItems)
+            currentTickets[activeTicketIndex] = activeTicket.copy(items = newItems)
             _tickets.value = currentTickets
         }
-        onSelectItem(null) // Deselect after applying
+        onSelectItem(null) 
+    }
+
+    fun addProductToCart(product: Product) {
+        val currentTickets = _tickets.value.toMutableList()
+        val activeTicketIndex = _activeTicketIndex.value
+        val activeTicket = currentTickets[activeTicketIndex]
+        val newItems = activeTicket.items.toMutableList()
+        
+        val existingItem = newItems.find { it.product.code == product.code && it.product.unit == ProductUnit.UNIDAD }
+        if (existingItem != null) {
+            val updatedItem = existingItem.copy(quantity = existingItem.quantity + 1)
+            val itemIndex = newItems.indexOf(existingItem)
+            newItems[itemIndex] = updatedItem
+        } else {
+            newItems.add(CartItem(product = product))
+        }
+        
+        currentTickets[activeTicketIndex] = activeTicket.copy(items = newItems)
+        _tickets.value = currentTickets
+        onSearchQueryChange("") 
+    }
+
+    fun onSearchQueryChange(query: String) {
+        _searchQuery.value = query
+        _activeKeyboard.value = KeyboardType.QWERTY
+    }
+
+    fun onSelectItem(item: CartItem?) {
+        _selectedCartItem.value = item
+        _keypadInput.value = ""
+        _activeKeyboard.value = if (item != null) KeyboardType.NUMERIC else KeyboardType.QWERTY
     }
 
     fun addTicket() {
@@ -258,26 +198,107 @@ class TpvViewModel @Inject constructor(
     fun closeTicket(index: Int) {
         val currentTickets = _tickets.value.toMutableList()
         if (index < 0 || index >= currentTickets.size) return
-
+        
         if (_selectedCartItem.value in currentTickets[index].items) {
             onSelectItem(null)
         }
+        
         currentTickets.removeAt(index)
-
         if (currentTickets.isEmpty()) {
             currentTickets.add(TicketState(id = nextTicketId++))
             _activeTicketIndex.value = 0
         } else if (_activeTicketIndex.value >= index) {
             _activeTicketIndex.value = (_activeTicketIndex.value - 1).coerceAtLeast(0)
         }
-        
         _tickets.value = currentTickets
+    }
+
+    fun removeItemFromCart(item: CartItem) {
+        if (_selectedCartItem.value == item) onSelectItem(null)
+        val currentTickets = _tickets.value.toMutableList()
+        val activeTicketIndex = _activeTicketIndex.value
+        val activeTicket = currentTickets[activeTicketIndex]
+        val newItems = activeTicket.items.toMutableList()
+        newItems.remove(item)
+        currentTickets[activeTicketIndex] = activeTicket.copy(items = newItems)
+        _tickets.value = currentTickets
+    }
+
+    fun incrementCartItemQuantity(item: CartItem) {
+        if (item.product.unit != ProductUnit.UNIDAD) return
+        val currentTickets = _tickets.value.toMutableList()
+        val activeTicketIndex = _activeTicketIndex.value
+        val activeTicket = currentTickets[activeTicketIndex]
+        val newItems = activeTicket.items.toMutableList()
+        val itemIndex = newItems.indexOf(item)
+        if (itemIndex != -1) {
+            newItems[itemIndex] = item.copy(quantity = item.quantity + 1)
+            currentTickets[activeTicketIndex] = activeTicket.copy(items = newItems)
+            _tickets.value = currentTickets
+        }
+    }
+
+    fun decrementCartItemQuantity(item: CartItem) {
+        if (item.product.unit != ProductUnit.UNIDAD) return
+        if (item.quantity > 1) {
+            val currentTickets = _tickets.value.toMutableList()
+            val activeTicketIndex = _activeTicketIndex.value
+            val activeTicket = currentTickets[activeTicketIndex]
+            val newItems = activeTicket.items.toMutableList()
+            val itemIndex = newItems.indexOf(item)
+            if (itemIndex != -1) {
+                newItems[itemIndex] = item.copy(quantity = item.quantity - 1)
+                currentTickets[activeTicketIndex] = activeTicket.copy(items = newItems)
+                _tickets.value = currentTickets
+            }
+        } else {
+            removeItemFromCart(item)
+        }
+    }
+
+    fun confirmSale() {
+        if (_isPrinting.value) return
+        viewModelScope.launch {
+            _isPrinting.value = true
+            try {
+                val activeTicketState = uiState.value.activeTicket
+                if (activeTicketState.items.isEmpty()) return@launch
+
+                val ticket = Ticket(timestamp = System.currentTimeMillis(), totalAmount = activeTicketState.total)
+                val savedTicketId = ticketRepository.saveTicket(ticket, activeTicketState.items.map {
+                    TicketItem(
+                        id = 0,
+                        ticketId = 0,
+                        productCode = it.product.code,
+                        productName = it.product.name,
+                        quantity = it.quantity,
+                        unitPrice = it.customPrice ?: it.product.price,
+                        totalPrice = it.totalPrice
+                    )
+                })
+
+                withContext(Dispatchers.IO) {
+                    var finalResult = printerHelper.printTicket(ticket.copy(id = savedTicketId), activeTicketState.items, savedTicketId.toString())
+                    if (finalResult is PrintResult.Success) {
+                        printerHelper.flushPrinter()
+                        delay(1500)
+                    }
+                    _printResult.value = finalResult
+                }
+                
+                closeTicket(_activeTicketIndex.value)
+                _showConfirmSaleDialog.value = false
+            } catch (e: Exception) {
+                _printResult.value = PrintResult.Error("Error al guardar venta: ${e.message}")
+            } finally {
+                _isPrinting.value = false
+            }
+        }
     }
 
     fun onFinalizeSaleClick() {
         viewModelScope.launch {
             if (uiState.value.activeTicket.items.isEmpty()) return@launch
-
             val printerAddress = userPreferencesRepository.printerMacAddress.first()
             if (printerAddress == null) {
                 _showNoPrinterDialog.value = true
@@ -287,132 +308,55 @@ class TpvViewModel @Inject constructor(
         }
     }
 
-    fun onDismissFinalizeSaleDialog() {
-        _showConfirmSaleDialog.value = false
-    }
-
-    fun onDismissNoPrinterDialog() {
-        _showNoPrinterDialog.value = false
-    }
+    fun onDismissFinalizeSaleDialog() { _showConfirmSaleDialog.value = false }
+    fun onDismissNoPrinterDialog() { _showNoPrinterDialog.value = false }
+    fun onPrintResultConsumed() { _printResult.value = null }
+    fun onSettingsClick() { refreshPairedDevices(); _showSettingsDialog.value = true }
+    fun onDismissSettingsDialog() { _showSettingsDialog.value = false }
     
-    fun onPrintResultConsumed() {
-        _printResult.value = null
-    }
-
-    fun confirmSale() {
-        viewModelScope.launch {
-            val activeTicketState = uiState.value.activeTicket
-            if (activeTicketState.items.isEmpty()) return@launch
-
-            val ticket = Ticket(
-                timestamp = System.currentTimeMillis(),
-                totalAmount = activeTicketState.total
-            )
-            val ticketItems = activeTicketState.items.map { cartItem ->
-                TicketItem(
-                    ticketId = 0, 
-                    productCode = cartItem.product.code,
-                    productName = cartItem.product.name,
-                    quantity = cartItem.quantity,
-                    unitPrice = cartItem.customPrice ?: cartItem.product.price,
-                    totalPrice = cartItem.totalPrice
-                )
-            }
-            
-            val savedTicketId = ticketRepository.saveTicket(ticket, ticketItems)
-            
-            withContext(Dispatchers.IO) {
-                var finalResult = printerHelper.printTicket(ticket, activeTicketState.items, savedTicketId.toString())
-                if (finalResult is PrintResult.Success) {
-                    val dynamicDelay = 1000L + (activeTicketState.items.size * 600L)
-                    delay(dynamicDelay) // Dynamic delay based on ticket size
-                    val flushResult = printerHelper.flushPrinter()
-                    if (flushResult is PrintResult.Error) { // Report flush error if it happens
-                        finalResult = flushResult
-                    }
-                }
-                _printResult.value = finalResult
-            }
-            
-            closeTicket(uiState.value.activeTicketIndex)
-            _showConfirmSaleDialog.value = false
-        }
-    }
-
-    fun reprintLastTicket() {
-        viewModelScope.launch {
-            val lastTicket = ticketRepository.getLastTicket()
-            if (lastTicket != null) {
-                val lastTicketWithItems = ticketRepository.getTicketWithItems(lastTicket.id).first()
-                if (lastTicketWithItems != null) {
-                    val allProducts = productRepository.getAllProducts().first()
-                    val productMap = allProducts.associateBy { it.code }
-
-                    val cartItems = lastTicketWithItems.items.mapNotNull { ticketItem ->
-                        val product = productMap[ticketItem.productCode]
-                        if (product != null) {
-                            CartItem(
-                                product = product,
-                                quantity = ticketItem.quantity,
-                                // Restore custom price only if it was a GRANEL product and the unit price differs
-                                customPrice = if (product.unit == ProductUnit.GRANEL && ticketItem.unitPrice != product.price) {
-                                    ticketItem.totalPrice
-                                } else {
-                                    null
-                                }
-                            )
-                        } else {
-                            null // Product not found, skip
-                        }
-                    }
-
-                    withContext(Dispatchers.IO) {
-                        var finalResult = printerHelper.printTicket(
-                            lastTicketWithItems.ticket,
-                            cartItems,
-                            lastTicketWithItems.ticket.id.toString(),
-                            withLogo = false // Do not print logo on reprint
-                        )
-                        if (finalResult is PrintResult.Success) {
-                            val dynamicDelay = 1000L + (cartItems.size * 600L)
-                            delay(dynamicDelay) // Dynamic delay based on ticket size
-                            val flushResult = printerHelper.flushPrinter()
-                             if (flushResult is PrintResult.Error) { // Report flush error if it happens
-                                finalResult = flushResult
-                            }
-                        }
-                        _printResult.value = finalResult
-                    }
-                } else {
-                    _printResult.value = PrintResult.Error("No se encontraron los productos del último ticket.")
-                }
-            } else {
-                 _printResult.value = PrintResult.Error("No hay ningún ticket para reimprimir.")
-            }
-        }
-    }
-
-    // Settings Logic
-    fun onSettingsClick() {
-        refreshPairedDevices()
-        _showSettingsDialog.value = true
-    }
-
-    fun onDismissSettingsDialog() {
-        _showSettingsDialog.value = false
-    }
-
     @SuppressLint("MissingPermission")
     fun refreshPairedDevices() {
-        val devices = printerHelper.getPairedDevices()?.map { 
-            it.name to it.address 
-        } ?: emptyList()
+        val devices = printerHelper.getPairedDevices()?.map { it.name to it.address } ?: emptyList()
         _pairedDevices.value = devices
     }
 
     fun selectPrinter(macAddress: String) {
+        viewModelScope.launch { userPreferencesRepository.savePrinterMacAddress(macAddress) }
+    }
+    
+    fun reprintLastTicket() {
+        if (_isPrinting.value) return
         viewModelScope.launch {
-            userPreferencesRepository.savePrinterMacAddress(macAddress)
+            _isPrinting.value = true
+            try {
+                val lastTicket = ticketRepository.getLastTicket()
+                if (lastTicket != null) {
+                    val lastTicketWithItems = ticketRepository.getTicketWithItems(lastTicket.id).first()
+                    if (lastTicketWithItems != null) {
+                        val productMap = productRepository.getAllProducts().first().associateBy { it.code }
+                        val cartItems = lastTicketWithItems.items.map { ticketItem ->
+                            val product = productMap[ticketItem.productCode] ?: Product(
+                                code = ticketItem.productCode ?: "",
+                                name = ticketItem.productName,
+                                price = ticketItem.unitPrice,
+                                department = "Desconocido",
+                                unit = if (ticketItem.quantity % 1.0 != 0.0) ProductUnit.GRANEL else ProductUnit.UNIDAD
+                            )
+                            CartItem(product = product, quantity = ticketItem.quantity)
+                        }
+                        withContext(Dispatchers.IO) {
+                            val result = printerHelper.printTicket(lastTicketWithItems.ticket, cartItems, lastTicketWithItems.ticket.id.toString())
+                            if (result is PrintResult.Success) {
+                                printerHelper.flushPrinter()
+                                delay(1500)
+                            }
+                            _printResult.value = result
+                        }
+                    }
+                }
+            } finally {
+                _isPrinting.value = false
+            }
         }
     }
 }

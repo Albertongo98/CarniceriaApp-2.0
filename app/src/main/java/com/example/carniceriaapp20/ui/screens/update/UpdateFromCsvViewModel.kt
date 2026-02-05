@@ -34,26 +34,48 @@ class UpdateFromCsvViewModel @Inject constructor(
             try {
                 val products = mutableListOf<Product>()
                 val lines = csvContent.lines()
+                if (lines.isEmpty()) return@launch
 
-                lines.drop(1).forEach { line -> // Drop header row
+                val header = lines[0]
+                // Detectar si el formato es el nuevo (coma) o el viejo (punto y coma)
+                val isNewFormat = header.contains(",") && header.contains("Producto")
+
+                lines.drop(1).forEach { line ->
                     if (line.isNotBlank()) {
-                        val tokens = line.split(';')
-                        if (tokens.size >= 5) {
-                            products.add(
-                                Product(
-                                    code = tokens[0].trim(),
-                                    name = tokens[1].trim(),
-                                    price = tokens[2].replace(',', '.').toDoubleOrNull() ?: 0.0,
-                                    department = tokens[3].trim(),
-                                    unit = if (tokens[4].trim().equals("GRANEL", ignoreCase = true)) ProductUnit.GRANEL else ProductUnit.UNIDAD
+                        val tokens = if (isNewFormat) splitCsv(line) else line.split(';')
+                        
+                        try {
+                            if (isNewFormat && tokens.size >= 11) {
+                                // Formato Nuevo: productos.csv
+                                products.add(
+                                    Product(
+                                        code = tokens[1].trim(),
+                                        name = tokens[2].trim(),
+                                        price = parsePrice(tokens[4]),
+                                        department = tokens[6].trim(),
+                                        unit = if (tokens[10].trim().equals("GRANEL", ignoreCase = true)) ProductUnit.GRANEL else ProductUnit.UNIDAD
+                                    )
                                 )
-                            )
+                            } else if (!isNewFormat && tokens.size >= 5) {
+                                // Formato Antiguo: 8477.csv
+                                products.add(
+                                    Product(
+                                        code = tokens[0].trim(),
+                                        name = tokens[1].trim(),
+                                        price = tokens[2].replace(',', '.').toDoubleOrNull() ?: 0.0,
+                                        department = tokens[3].trim(),
+                                        unit = if (tokens[4].trim().equals("GRANEL", ignoreCase = true)) ProductUnit.GRANEL else ProductUnit.UNIDAD
+                                    )
+                                )
+                            }
+                        } catch (e: Exception) {
+                            // Ignorar líneas con errores individuales para no detener toda la importación
                         }
                     }
                 }
 
-                if (products.isEmpty() && lines.size > 1) {
-                    _uiState.value = UpdateUiState(result = UpdateResult.Error("No se pudieron encontrar productos válidos en el archivo."))
+                if (products.isEmpty()) {
+                    _uiState.value = UpdateUiState(result = UpdateResult.Error("No se encontraron productos válidos. Verifique el formato del archivo."))
                     return@launch
                 }
 
@@ -62,9 +84,20 @@ class UpdateFromCsvViewModel @Inject constructor(
                 _uiState.value = UpdateUiState(result = UpdateResult.Success(products.size))
 
             } catch (e: Exception) {
-                _uiState.value = UpdateUiState(result = UpdateResult.Error(e.message ?: "Error desconocido durante la importación."))
+                _uiState.value = UpdateUiState(result = UpdateResult.Error("Error: ${e.message}"))
             }
         }
+    }
+
+    // Función para limpiar el precio de símbolos como '$'
+    private fun parsePrice(priceStr: String): Double {
+        val clean = priceStr.replace("$", "").replace(",", "").trim()
+        return clean.toDoubleOrNull() ?: 0.0
+    }
+
+    // Lógica básica para manejar comas dentro de textos si fuera necesario
+    private fun splitCsv(line: String): List<String> {
+        return line.split(',')
     }
 
     fun resetState() {

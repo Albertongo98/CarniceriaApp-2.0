@@ -1,92 +1,47 @@
-u# Directivas de Desarrollo para Carniceriapp v2.0
+# Directivas de Desarrollo para Carniceriapp v2.0
 
-Este documento establece las reglas, principios y funciones críticas para el desarrollo de `Carniceriapp v2.0`. El objetivo es garantizar un desarrollo consistente, mantenible y de alta calidad, evitando los problemas de la versión anterior.
+Este documento establece las reglas, principios y funciones críticas para el desarrollo de `Carniceriapp v2.0`. El objetivo es garantizar un desarrollo consistente, mantenible y de alta calidad.
 
 ## 1. Reglas de Oro (No Negociables)
 
 ### 1.1. Arquitectura y Stack Tecnológico
 
-1.  **UI 100% Jetpack Compose:** Todo el UI, desde la pantalla principal hasta el último diálogo, se construirá con Jetpack Compose. **No se utilizará XML para layouts bajo ninguna circunstancia.**
-2.  **Arquitectura MVVM Estricta:**
-    -   **Vistas (Composables):** Solo deben observar el estado del ViewModel y notificarle las acciones del usuario. No deben contener lógica de negocio.
-    -   **ViewModels:** Exponen el estado de la UI a través de `StateFlow` y contienen la lógica de presentación. Se obtienen en los Composables con `hiltViewModel()`.
-    -   **Repositorios:** Abstraen el origen de los datos (base de datos, red, etc.). Los ViewModels se comunican exclusivamente con los Repositorios, nunca directamente con los DAOs.
-    -   **Modelos (Entidades Room):** Representan los datos de la aplicación.
-3.  **Inyección de Dependencias con Hilt:** Todas las dependencias (ViewModels, Repositorios, DAOs, Database) serán gestionadas y provistas por Hilt. No se permite la instanciación manual de estas clases.
-4.  **Coroutines y Flow para Asincronía:** Todas las operaciones de larga duración (lectura/escritura de BD, impresión) deben ejecutarse en coroutines, utilizando el despachador adecuado (`Dispatchers.IO` para BD, `Dispatchers.Main` para UI).
+1.  **UI 100% Jetpack Compose:** Todo el UI se construye con Jetpack Compose.
+2.  **Arquitectura MVVM Estricta:** Vistas (Composables) -> ViewModels -> Repositorios.
+3.  **Inyección de Dependencias con Hilt:** Todas las dependencias son gestionadas por Hilt.
+4.  **Asincronía con Coroutines y Flow:** Todas las operaciones de BD, red o impresión se ejecutan en coroutines.
 
-## 2. Funciones Críticas (Sagradas e Intocables)
+### 1.2. Regla de Oro: El Flush Print
 
-Las siguientes funciones contienen lógica de negocio esencial que ha sido depurada y validada. **No deben ser modificadas sin un análisis de impacto exhaustivo y aprobación explícita.** Deben ser aisladas en clases `Helper` o `UseCase` y ser probadas unitariamente.
+**El "Flush Print" es una pausa obligatoria de 1.5 segundos que debe realizarse *después* de cada impresión de ticket.** Esta regla previene el sobrecalentamiento del cabezal de la impresora y la corrupción de datos. Es una regla de hardware crítica.
 
-### 2.1. Lógica de Generación de Código de Barras para TPV (Productos a Granel)
+### 1.3. Regla de Oro: Botón de Impresión Único
 
-Esta función es la responsable de crear el código de barras que lee el sistema de caja. Su formato es vital.
+**El botón "Imprimir y Guardar" debe ser a prueba de múltiples clics.** Al presionarlo, debe mostrar inmediatamente un indicador de carga y deshabilitarse para prevenir la creación de tickets duplicados. Cualquier clic posterior mientras está en estado de "imprimiendo" será ignorado.
 
-**Especificación:** `200` + `código de producto (4 dígitos)` + `precio total (5 dígitos)` + `5`
+## 2. Funciones Críticas (Sagradas)
 
-```kotlin
-/**
- * Genera el código de barras en formato EAN-13 para ser leído por el TPV.
- * Especificación: "200" + código de producto (4 dígitos) + precio total (5 dígitos) + "5"
- *
- * @param productoCodigo El código del producto (ej. "1090").
- * @param montoVenta El precio total del item (ej. 50.50).
- * @return El código de barras formateado como String (ej. "2001090050505").
- */
-fun generarCodigoParaPOS(productoCodigo: String, montoVenta: Double): String {
-    val codigoProductoStr = productoCodigo.padStart(4, '0')
-    val montoVentaStr = (montoVenta * 100).roundToInt().toString().padStart(5, '0')
-    return "200${codigoProductoStr}${montoVentaStr}5"
-}
-```
+-   **`generarCodigoParaPOS`**: Genera el código EAN-13 para productos a granel. Formato: `"200" + [código de producto 4 dígitos] + [precio total 5 dígitos] + "5"`.
+-   **`generarCodigoControlInterno`**: Genera el QR de auditoría. Formato: `HHMMSS-FFF-MMMM.CC`.
 
-### 2.2. Lógica de Generación de Código QR para Control Interno
+## 3. Plan de Trabajo (Post-Reparación)
 
-Este código es para uso interno y su formato debe ser consistente para futuras herramientas de análisis.
+*   [x] **1. Reparar Compilación del Proyecto:**
+    *   Se actualizaron las dependencias de Gradle (AGP 8.5.2, Kotlin 2.0.21) y se corrigieron las versiones del SDK (target 34).
+    *   Se recrearon las `data class` perdidas (`TicketState`, `CartItem`).
+    *   Se corrigieron los errores de tipos en `TpvViewModel` al guardar en la base de datos.
 
-**Especificación:** `HHMMSS-FFF-MMMM.CC`
+*   [x] **2. Implementar Indicador de Carga en Botón de Impresión:**
+    *   El botón "Imprimir y Guardar" ahora muestra un `CircularProgressIndicator` y se deshabilita durante el proceso de venta para evitar duplicados.
 
-```kotlin
-/**
- * Genera la cadena de datos para el código QR de control interno.
- * Especificación: HHMMSS-FFF-MMMM.CC
- *
- * @param timestamp La fecha y hora de la venta en milisegundos.
- * @param folio El folio de la venta (ej. "1").
- * @param montoTotal El monto total del ticket (ej. 125.50).
- * @return La cadena formateada para el QR (ej. "143025-001-0125.50").
- */
-fun generarCodigoControlInterno(timestamp: Long, folio: String, montoTotal: Double): String {
-    val dateFormat = SimpleDateFormat("HHmmss", Locale.US)
-    val timeStr = dateFormat.format(Date(timestamp))
-    val folioStr = folio.padStart(3, '0')
-    val montoStr = String.format(Locale.US, "%07.2f", montoTotal) // Crucial: Mantiene el punto decimal.
-    
-    return "$timeStr-$folioStr-$montoStr"
-}
-```
+*   [x] **3. Corregir Reimpresión en Historial:**
+    *   Se ajustó `HistoryViewModel` para reconstruir correctamente los `CartItem` a partir de `TicketItem`, distinguiendo entre ventas por pieza y por "precio manual".
 
-## 3. Plan de Desarrollo Incremental
+*   [x] **4. Ajustes de Impresión de Ticket:**
+    *   **Logo Eliminado:** El logo ya no se imprime por defecto para agilizar la impresión.
+    *   **QR Agrandado:** El tamaño del QR de control interno se incrementó en ~33% (módulo de 3 a 4) para mejorar la lectura.
 
-El desarrollo se realizará por fases para minimizar riesgos y tener entregables funcionales en cada etapa.
+## 4. Gestión del Proyecto
 
-1.  **Fase 1: Cimientos.**
-    -   Configurar Gradle, Hilt, Room y Compose Navigation.
-    -   Definir las entidades de Room y sus DAOs.
-    -   Crear los Repositorios y los módulos de Hilt.
-2.  **Fase 2: Gestión de Productos (CRUD).**
-    -   Implementar las pantallas de "Lista de Productos" y "Añadir/Editar Producto" usando Jetpack Compose. Validar el stack completo (UI -> ViewModel -> Repository -> DB).
-3.  **Fase 3: Corazón del TPV.**
-    -   Construir la pantalla principal de 3 paneles.
-    -   Implementar el catálogo, la búsqueda, la gestión de múltiples tickets y la edición de items.
-4.  **Fase 4: Hardware y Finalización.**
-    -   Reutilizar y adaptar el `BluetoothPrinterHelper`.
-    -   Conectar la lógica de impresión a los botones de "Finalizar Venta" y "Reimprimir".
-    -   Implementar las pantallas de "Historial" y "Actualizar BD desde CSV".
-
-## 4. Sugerencias de Mejora (A implementar en v2.0)
-
--   **Pantalla de Configuración:** En lugar de opciones en el menú, crear una pantalla de "Ajustes" dedicada. Usar `Jetpack DataStore` para persistir la dirección MAC de la impresora y, potencialmente, la ruta del archivo CSV.
--   **Mejorar la Experiencia de Edición:** Al editar un item en el ticket, en lugar de un `EditText`, mostrar un diálogo o un popup más amigable que use el teclado numérico para evitar cambios de foco indeseados.
--   **Pruebas Unitarias:** Añadir pruebas unitarias para los ViewModels y, especialmente, para las funciones críticas definidas en la sección 2. Esto nos protegerá de regresiones en el futuro.
+-   **Checklist:** Este documento es el checklist oficial. Los puntos se marcan como completados `[x]`.
+-   **Commits:** Se realizará un commit a Git después de completar cada punto para mantener puntos de restauración estables.

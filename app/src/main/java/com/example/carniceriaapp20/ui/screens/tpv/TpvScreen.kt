@@ -5,13 +5,16 @@ import android.annotation.SuppressLint
 import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -19,11 +22,14 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -31,6 +37,7 @@ import androidx.navigation.NavController
 import com.example.carniceriaapp20.R
 import com.example.carniceriaapp20.data.local.Product
 import com.example.carniceriaapp20.data.local.ProductUnit
+import com.example.carniceriaapp20.ui.composables.QwertyKeyboard
 import com.example.carniceriaapp20.ui.navigation.Routes
 import com.example.carniceriaapp20.util.PrintResult
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -68,7 +75,17 @@ fun TpvScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Carniceriapp") },
+                title = { 
+                    Text(
+                        "Carniceriapp 2.0", 
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                    ) 
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
+                ),
                 actions = {
                     Box {
                         IconButton(onClick = { menuExpanded = true }) {
@@ -86,7 +103,7 @@ fun TpvScreen(
                                 },
                                 leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
                             )
-                            Divider()
+                            HorizontalDivider()
                             DropdownMenuItem(
                                 text = { Text("Historial de Tickets") },
                                 onClick = { 
@@ -126,19 +143,19 @@ fun TpvScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
-        Column(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
-            Row(modifier = Modifier.weight(1f).padding(4.dp)) {
+        Column(modifier = Modifier.padding(paddingValues).fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            Row(modifier = Modifier.weight(1f)) {
                 ProductCatalogPanel(
-                    modifier = Modifier.weight(0.45f).fillMaxHeight(),
+                    modifier = Modifier.weight(0.42f).fillMaxHeight(),
                     uiState = uiState,
                     onSearchQueryChange = viewModel::onSearchQueryChange,
                     onProductClick = viewModel::addProductToCart
                 )
 
-                Divider(modifier = Modifier.fillMaxHeight().width(1.dp).padding(vertical = 8.dp))
+                VerticalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
 
                 TicketManagementPanel(
-                    modifier = Modifier.weight(0.55f).fillMaxHeight(),
+                    modifier = Modifier.weight(0.58f).fillMaxHeight(),
                     uiState = uiState,
                     onSelectItem = viewModel::onSelectItem,
                     onRemoveItem = viewModel::removeItemFromCart,
@@ -158,16 +175,18 @@ fun TpvScreen(
                 )
             }
 
-            Divider()
+            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
             
-            KeypadWithActionsPanel(
+            DynamicKeyboardPanel(
                 modifier = Modifier.fillMaxWidth(),
-                selectedItem = uiState.selectedCartItem,
-                keypadInput = uiState.keypadInput,
+                uiState = uiState,
+                onQwertyKeyPress = viewModel::onQwertyKeyPress,
                 onKeypadInput = viewModel::onKeypadInput,
                 onClear = viewModel::onKeypadClear,
                 onBackspace = viewModel::onKeypadBackspace,
-                onApply = viewModel::onApplyKeypadInput
+                onApply = viewModel::onApplyKeypadInput,
+                onProductClick = viewModel::addProductToCart,
+                onAmountClick = viewModel::applyQuickAmount
             )
         }
     }
@@ -175,6 +194,7 @@ fun TpvScreen(
     if (uiState.showConfirmSaleDialog) {
         ConfirmSaleDialog(
             ticket = uiState.activeTicket,
+            isPrinting = uiState.isPrinting,
             onDismiss = viewModel::onDismissFinalizeSaleDialog,
             onConfirm = viewModel::confirmSale
         )
@@ -208,52 +228,116 @@ fun ProductCatalogPanel(
     onProductClick: (Product) -> Unit
 ) {
     var expandedState by rememberSaveable { mutableStateOf(mapOf<String, Boolean>()) }
-
     val isSearchActive = uiState.searchQuery.isNotBlank()
 
-    Column(modifier = modifier.padding(horizontal = 8.dp)) {
-        Image(
-            painter = painterResource(id = R.drawable.logo_color),
-            contentDescription = "Logo de La Palma",
-            modifier = Modifier.fillMaxWidth().height(80.dp).padding(vertical = 8.dp),
-            contentScale = ContentScale.Fit
-        )
-        OutlinedTextField(
-            value = uiState.searchQuery,
-            onValueChange = onSearchQueryChange,
-            label = { Text("Buscar producto...") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        LazyColumn {
+    Column(modifier = modifier.padding(8.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(90.dp)
+                .padding(bottom = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.logo_color),
+                contentDescription = "Logo de La Palma",
+                modifier = Modifier.fillMaxHeight(),
+                contentScale = ContentScale.Fit
+            )
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxWidth().focusable(true).onFocusChanged {
+                if (it.isFocused) {
+                    onSearchQueryChange(uiState.searchQuery) 
+                }
+            },
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .clickable { onSearchQueryChange(uiState.searchQuery) },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = if (uiState.searchQuery.isEmpty()) "Buscar producto..." else uiState.searchQuery,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (uiState.searchQuery.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             uiState.filteredProducts.forEach { (department, products) ->
                 item {
                     val isExpanded = expandedState.getOrDefault(department, false)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { 
+                    Surface(
+                        onClick = { 
                             if (!isSearchActive) {
                                 expandedState = expandedState + (department to !isExpanded) 
                             }
-                        }.padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        },
+                        color = if (isSearchActive || isExpanded) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(
-                            imageVector = if (isSearchActive || isExpanded) Icons.Default.ArrowDropDown else Icons.Default.KeyboardArrowRight, 
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(text = department, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (isSearchActive || isExpanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight, 
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = department.uppercase(), 
+                                style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 1.sp), 
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
                 if (isSearchActive || expandedState.getOrDefault(department, false)) {
                     items(products) { product ->
-                        Card(
+                        OutlinedCard(
                             onClick = { onProductClick(product) }, 
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 16.dp),
-                            shape = MaterialTheme.shapes.medium
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp, horizontal = 12.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
-                            Text(product.name, modifier = Modifier.padding(16.dp))
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    product.name, 
+                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    "$${product.price}", 
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
@@ -276,126 +360,119 @@ fun TicketManagementPanel(
     onFinalizeSale: () -> Unit,
     onReprintLast: () -> Unit
 ) {
-    Column(modifier = modifier.padding(horizontal = 8.dp)) {
-        ScrollableTabRow(selectedTabIndex = uiState.activeTicketIndex) {
+    Column(modifier = modifier) {
+        ScrollableTabRow(
+            selectedTabIndex = uiState.activeTicketIndex,
+            containerColor = Color.Transparent,
+            divider = {},
+            edgePadding = 8.dp
+        ) {
             uiState.tickets.forEachIndexed { index, ticket ->
                 Tab(
                     selected = uiState.activeTicketIndex == index,
                     onClick = { onSetActiveTicket(index) },
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Ticket ${ticket.id}")
+                            Text("Ticket ${index + 1}", fontWeight = if (uiState.activeTicketIndex == index) FontWeight.Bold else FontWeight.Normal)
                             if (uiState.tickets.size > 1) {
-                                IconButton(onClick = { onCloseTicket(index) }, modifier = Modifier.size(24.dp)) {
-                                    Icon(Icons.Default.Close, contentDescription = "Cerrar ticket", modifier = Modifier.size(16.dp))
-                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    Icons.Default.Close, 
+                                    contentDescription = "Cerrar", 
+                                    modifier = Modifier.size(14.dp).clickable { onCloseTicket(index) }
+                                )
                             }
                         }
                     }
                 )
             }
-            Tab(selected = false, onClick = onAddTicket, text = { Icon(Icons.Default.Add, contentDescription = "Añadir ticket") })
+            Tab(
+                selected = false, 
+                onClick = onAddTicket, 
+                text = { Icon(Icons.Default.Add, contentDescription = "Añadir ticket") }
+            )
         }
 
-        LazyColumn(modifier = Modifier.weight(1f).padding(top = 8.dp)) {
-            items(uiState.activeTicket.items, key = { it.product.code + it.quantity + it.customPrice }) { item ->
-                CartItemRow(
-                    item = item, 
-                    isSelected = uiState.selectedCartItem == item,
-                    onClick = { 
-                        if (uiState.selectedCartItem == item) onSelectItem(null) else onSelectItem(item)
-                    },
-                    onRemove = { onRemoveItem(item) },
-                    onIncrement = { onIncrementItem(item) },
-                    onDecrement = { onDecrementItem(item) }
-                )
-                Divider(color = MaterialTheme.colorScheme.outlineVariant)
-            }
-        }
-
-        Text(
-            text = "Total: ${ String.format("%.2f", uiState.activeTicket.total)}",
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.align(Alignment.End).padding(bottom = 8.dp)
-        )
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = onReprintLast, modifier = Modifier.weight(1f)) {
-                Text("Reimprimir")
-            }
-            Button(onClick = onFinalizeSale, modifier = Modifier.weight(1f)) {
-                Text("Finalizar Venta")
-            }
-        }
-    }
-}
-
-@Composable
-fun KeypadWithActionsPanel(
-    modifier: Modifier = Modifier,
-    selectedItem: CartItem?,
-    keypadInput: String,
-    onKeypadInput: (String) -> Unit,
-    onClear: () -> Unit,
-    onBackspace: () -> Unit,
-    onApply: (isPrice: Boolean) -> Unit
-) {
-    Column(modifier = modifier.padding(8.dp)) {
-        OutlinedTextField(
-            value = keypadInput,
-            onValueChange = {},
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text(if (selectedItem != null) "Editando: ${selectedItem.product.name}" else "Seleccione un producto para editar") },
-            textStyle = MaterialTheme.typography.headlineSmall.copy(textAlign = TextAlign.Center),
-            readOnly = true,
-            trailingIcon = {
-                IconButton(onClick = onBackspace) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Borrar")
+        Box(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
+            if (uiState.activeTicket.items.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.ShoppingCart, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outlineVariant)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("El ticket está vacío", color = MaterialTheme.colorScheme.outline)
                 }
-            }
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier.weight(0.6f),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                userScrollEnabled = false
-            ) {
-                items(listOf("7", "8", "9", "4", "5", "6", "1", "2", "3", ".", "0")) {
-                    Button(modifier = Modifier.aspectRatio(1.8f), onClick = { onKeypadInput(it) }) {
-                        Text(it, fontSize = 18.sp)
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    // CORREGIDO: Usamos el nuevo ID único como clave de la lista
+                    items(uiState.activeTicket.items, key = { it.id }) { item ->
+                        CartItemRow(
+                            item = item, 
+                            isSelected = uiState.selectedCartItem == item,
+                            onClick = { 
+                                if (uiState.selectedCartItem == item) onSelectItem(null) else onSelectItem(item)
+                            },
+                            onRemove = { onRemoveItem(item) },
+                            onIncrement = { onIncrementItem(item) },
+                            onDecrement = { onDecrementItem(item) }
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     }
                 }
             }
-            Column(
-                modifier = Modifier.weight(0.4f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Button(
-                    onClick = { onApply(false) }, // Apply Quantity
-                    enabled = selectedItem != null,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(2.5f)
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 4.dp,
+            shadowElevation = 8.dp
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("KG/PZ")
+                    Text("TOTAL A PAGAR", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+                    Text(
+                        text = "$${ String.format("%.2f", uiState.activeTicket.total)}",
+                        style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
-                Button(
-                    onClick = { onApply(true) }, // Apply Price
-                    enabled = selectedItem?.product?.unit == ProductUnit.GRANEL,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(2.5f)
+                
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(), 
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("$")
-                }
-                 OutlinedButton(
-                    modifier = Modifier.fillMaxWidth().aspectRatio(2.5f), 
-                    onClick = onClear
-                 ) {
-                    Text("Limpiar")
+                    OutlinedButton(
+                        onClick = onReprintLast, 
+                        enabled = !uiState.isPrinting,
+                        modifier = Modifier.weight(0.4f).height(56.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Print, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("REIMPRIMIR")
+                    }
+                    Button(
+                        onClick = onFinalizeSale, 
+                        enabled = !uiState.isPrinting && uiState.activeTicket.items.isNotEmpty(),
+                        modifier = Modifier.weight(0.6f).height(56.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20))
+                    ) {
+                        if (uiState.isPrinting) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                        } else {
+                            Text("FINALIZAR VENTA", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        }
+                    }
                 }
             }
         }
@@ -415,58 +492,252 @@ fun CartItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+            .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else Color.Transparent)
+            .padding(vertical = 12.dp, horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(item.product.name, fontWeight = FontWeight.Bold)
+            Text(
+                item.product.name, 
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+            )
             val desc = if (item.product.unit == ProductUnit.GRANEL) {
-                if (item.customPrice != null) "Precio Manual" else "${item.quantity} kg"
+                if (item.customPrice != null) "Importe manual" else "${String.format("%.3f", item.quantity)} kg"
             } else {
-                "${item.quantity.toInt()} x $${item.product.price}"
+                "${item.quantity.toInt()} piezas x $${item.product.price}"
             }
-            Text(desc)
+            Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+
         if (item.product.unit == ProductUnit.UNIDAD) {
-            IconButton(onClick = onDecrement, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.RemoveCircle, contentDescription = "Quitar 1", tint = MaterialTheme.colorScheme.secondary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onDecrement, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.RemoveCircleOutline, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                }
+                Text(
+                    item.quantity.toInt().toString(), 
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(onClick = onIncrement, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.AddCircleOutline, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                }
             }
-            IconButton(onClick = onIncrement, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.AddCircle, contentDescription = "Añadir 1", tint = MaterialTheme.colorScheme.secondary)
-            }
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(16.dp))
         }
-        Text("$" + "%.2f".format(item.totalPrice), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+
+        Text(
+            "$${"%.2f".format(item.totalPrice)}", 
+            style = MaterialTheme.typography.titleMedium, 
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        
         Spacer(modifier = Modifier.width(8.dp))
+        
         IconButton(onClick = onRemove) {
-            Icon(Icons.Default.Delete, contentDescription = "Eliminar producto", tint = MaterialTheme.colorScheme.error)
+            Icon(Icons.Default.DeleteOutline, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f))
         }
     }
 }
 
 @Composable
-fun ConfirmSaleDialog(ticket: TicketState, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+fun DynamicKeyboardPanel(
+    modifier: Modifier = Modifier,
+    uiState: TpvUiState,
+    onQwertyKeyPress: (String) -> Unit,
+    onKeypadInput: (String) -> Unit,
+    onClear: () -> Unit,
+    onBackspace: () -> Unit,
+    onApply: (isPrice: Boolean) -> Unit,
+    onProductClick: (Product) -> Unit,
+    onAmountClick: (Double) -> Unit
+) {
+    Box(modifier.height(440.dp).fillMaxWidth().background(MaterialTheme.colorScheme.surface)) { 
+        when (uiState.activeKeyboard) {
+            KeyboardType.QWERTY -> {
+                QwertyKeyboard(
+                    modifier = Modifier.fillMaxSize(), 
+                    fastProducts = uiState.fastProducts,
+                    onKeyPress = onQwertyKeyPress,
+                    onProductClick = onProductClick,
+                    onAmountClick = onAmountClick
+                )
+            }
+            KeyboardType.NUMERIC -> {
+                KeypadWithActionsPanel(
+                    modifier = Modifier.fillMaxSize(),
+                    selectedItem = uiState.selectedCartItem,
+                    keypadInput = uiState.keypadInput,
+                    onKeypadInput = onKeypadInput,
+                    onClear = onClear,
+                    onBackspace = onBackspace,
+                    onApply = onApply
+                )
+            }
+        }
+    }
+}
+
+
+@Composable
+fun KeypadWithActionsPanel(
+    modifier: Modifier = Modifier,
+    selectedItem: CartItem?,
+    keypadInput: String,
+    onKeypadInput: (String) -> Unit,
+    onClear: () -> Unit,
+    onBackspace: () -> Unit,
+    onApply: (isPrice: Boolean) -> Unit
+) {
+    Column(modifier = modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (selectedItem != null) "EDITANDO: ${selectedItem.product.name}" else "SELECCIONE UN PRODUCTO",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (keypadInput.isEmpty()) "0" else keypadInput,
+                        style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                
+                Button(
+                    onClick = onBackspace,
+                    modifier = Modifier.size(56.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Icon(Icons.Default.Backspace, contentDescription = "Borrar", modifier = Modifier.size(24.dp))
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier.weight(0.65f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                userScrollEnabled = false
+            ) {
+                val keys = listOf("7", "8", "9", "4", "5", "6", "1", "2", "3", ".", "0")
+                items(keys) { key ->
+                    Button(
+                        modifier = Modifier.fillMaxWidth().height(75.dp),
+                        onClick = { onKeypadInput(key) },
+                        shape = RoundedCornerShape(8.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20))
+                    ) {
+                        Text(key, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            
+            Column(
+                modifier = Modifier.weight(0.35f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Button(
+                    onClick = { onApply(false) }, 
+                    enabled = selectedItem != null,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20))
+                ) {
+                    Text("PESAR\n(KG / PZ)", textAlign = TextAlign.Center, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, lineHeight = 18.sp)
+                }
+                Button(
+                    onClick = { onApply(true) }, 
+                    enabled = selectedItem?.product?.unit == ProductUnit.GRANEL,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20))
+                ) {
+                    Text("IMPORTE\n($)", textAlign = TextAlign.Center, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, lineHeight = 18.sp)
+                }
+                 OutlinedButton(
+                    modifier = Modifier.fillMaxWidth().weight(0.8f), 
+                    onClick = onClear,
+                    shape = RoundedCornerShape(8.dp),
+                    border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF1B5E20))
+                 ) {
+                    Text("LIMPIAR", fontWeight = FontWeight.ExtraBold, color = Color(0xFF1B5E20), fontSize = 14.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ConfirmSaleDialog(
+    ticket: TicketState, 
+    isPrinting: Boolean, 
+    onDismiss: () -> Unit, 
+    onConfirm: () -> Unit
+) {
     AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Confirmar Venta") },
+        onDismissRequest = if (isPrinting) ({}) else onDismiss,
+        title = { Text("Confirmar Venta", fontWeight = FontWeight.Bold) },
         text = {
             Column {
-                Text("Resumen del Ticket:", fontWeight = FontWeight.Bold)
-                LazyColumn(modifier = Modifier.padding(top = 16.dp)) {
+                Text("Resumen de compra:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
                     items(ticket.items) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("${it.quantity}x ${it.product.name}")
-                            Text("$" + "%.2f".format(it.totalPrice))
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                            val qtyText = if(it.product.unit == ProductUnit.GRANEL) String.format("%.3f kg", it.quantity) else "${it.quantity.toInt()} pz"
+                            Text("$qtyText ${it.product.name}", modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("$" + "%.2f".format(it.totalPrice), fontWeight = FontWeight.Bold)
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(text = "Total: $" + "%.2f".format(ticket.total), style = MaterialTheme.typography.titleLarge, modifier = Modifier.align(Alignment.End))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("TOTAL", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(text = "$" + "%.2f".format(ticket.total), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold)
+                }
             }
         },
-        confirmButton = { Button(onClick = onConfirm) { Text("Imprimir y Guardar") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+        confirmButton = { 
+            Button(
+                onClick = onConfirm, 
+                enabled = !isPrinting,
+                modifier = Modifier.widthIn(min = 140.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) { 
+                if (isPrinting) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                } else {
+                    Text("IMPRIMIR Y GUARDAR") 
+                }
+            }
+        },
+        dismissButton = { 
+            TextButton(onClick = onDismiss, enabled = !isPrinting) { 
+                Text("CANCELAR") 
+            } 
+        }
     )
 }
 
@@ -521,24 +792,28 @@ fun SettingsDialog(
                     }
                 } else {
                     if (uiState.pairedDevices.isEmpty()) {
-                        Text("No se encontraron impresoras vinculadas. Asegúrese de que la impresora esté encendida y vinculada al dispositivo.")
+                        Text("No se encontraron impresoras vinculadas.")
                     } else {
-                        LazyColumn {
+                        LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
                             items(uiState.pairedDevices) { device ->
                                 val isSelected = uiState.selectedPrinterMac == device.second
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { onSelectPrinter(device.second) }
-                                        .padding(vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth().clickable { onSelectPrinter(device.second) },
+                                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                    shape = RoundedCornerShape(8.dp)
                                 ) {
-                                    Text(device.first, modifier = Modifier.weight(1f))
-                                    if (isSelected) {
-                                        Icon(Icons.Default.Check, contentDescription = "Seleccionado", tint = MaterialTheme.colorScheme.primary)
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Bluetooth, contentDescription = null, tint = if(isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(device.first, modifier = Modifier.weight(1f), fontWeight = if(isSelected) FontWeight.Bold else FontWeight.Normal)
+                                        if (isSelected) {
+                                            Icon(Icons.Default.CheckCircle, contentDescription = "Seleccionado", tint = MaterialTheme.colorScheme.primary)
+                                        }
                                     }
                                 }
-                                Divider()
                             }
                         }
                     }
@@ -546,8 +821,8 @@ fun SettingsDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cerrar")
+            TextButton(onClick = { onDismiss() }) {
+                Text("CERRAR")
             }
         },
         dismissButton = {

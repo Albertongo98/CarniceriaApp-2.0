@@ -2,11 +2,13 @@ package com.example.carniceriaapp20.data.repository
 
 import com.example.carniceriaapp20.data.local.Product
 import com.example.carniceriaapp20.data.local.ProductDao
+import com.example.carniceriaapp20.data.local.TicketDao
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
 class ProductRepositoryImpl @Inject constructor(
-    private val productDao: ProductDao
+    private val productDao: ProductDao,
+    private val ticketDao: TicketDao
 ) : ProductRepository {
 
     override fun getAllProducts(): Flow<List<Product>> {
@@ -31,5 +33,9 @@ class ProductRepositoryImpl @Inject constructor(
 
     override suspend fun deleteAllProducts() {
         productDao.deleteAllProducts()
+    }
+
+    override fun getTopSellingProducts(): Flow<List<Product>> {
+        return ticketDao.getTopSellingProducts()
     }
 }

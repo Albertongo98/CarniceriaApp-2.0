@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import kotlin.math.abs
 
 data class HistoryUiState(
     val tickets: List<TicketWithItems> = emptyList(),
@@ -89,18 +90,20 @@ class HistoryViewModel @Inject constructor(
             withContext(Dispatchers.IO) {
                 for (ticketWithItems in selectedTickets) {
                     val cartItems = ticketWithItems.items.map { ticketItem ->
-                        // Reconstruct CartItem from TicketItem for printing
-                        val isProbablyGranel = ticketItem.quantity.rem(1.0) != 0.0
+                        // Detectar si era un precio manual (cuando unitPrice == totalPrice y cantidad != 1)
+                        val isManualPrice = abs(ticketItem.unitPrice - ticketItem.totalPrice) < 0.01 && ticketItem.quantity != 1.0
+                        val isProbablyGranel = ticketItem.quantity % 1.0 != 0.0 || isManualPrice
+
                         CartItem(
                             product = Product(
                                 code = ticketItem.productCode ?: "",
-                                name = ticketItem.productName ?: "Producto Borrado",
-                                price = ticketItem.unitPrice,
-                                department = "", // Not needed for printing
+                                name = ticketItem.productName,
+                                price = if (isManualPrice) 0.0 else ticketItem.unitPrice,
+                                department = "", 
                                 unit = if(isProbablyGranel) ProductUnit.GRANEL else ProductUnit.UNIDAD
                             ),
                             quantity = ticketItem.quantity,
-                            customPrice = null // totalPrice is derived from unitPrice * quantity
+                            customPrice = if (isManualPrice) ticketItem.totalPrice else null
                         )
                     }
                     
@@ -108,24 +111,20 @@ class HistoryViewModel @Inject constructor(
                         ticket = ticketWithItems.ticket,
                         items = cartItems,
                         folio = ticketWithItems.ticket.id.toString(),
-                        withLogo = false
+                        withLogo = false // Desactivamos el logo para el historial también
                     )
 
                     if (printJobResult is PrintResult.Success) {
-                        val dynamicDelay = 1000L + (cartItems.size * 600L)
-                        delay(dynamicDelay)
+                        delay(1500) // Regla de Oro: Flush Print
                         printerHelper.flushPrinter()
                     } else {
-                        finalResult = printJobResult // If any ticket fails, report the error and stop.
+                        finalResult = printJobResult
                         break
                     }
                 }
             }
             _printResult.value = finalResult
-
-            if (finalResult is PrintResult.Success) {
-                clearSelection()
-            }
+            if (finalResult is PrintResult.Success) clearSelection()
         }
     }
 

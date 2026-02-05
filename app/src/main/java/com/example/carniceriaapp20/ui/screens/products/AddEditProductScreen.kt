@@ -1,16 +1,34 @@
 package com.example.carniceriaapp20.ui.screens.products
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.carniceriaapp20.data.local.ProductUnit
+import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun AddEditProductScreen(
@@ -18,8 +36,26 @@ fun AddEditProductScreen(
     viewModel: AddEditProductViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    Scaffold {
+    LaunchedEffect(key1 = true) {
+        viewModel.eventFlow.collectLatest { event ->
+            when (event) {
+                is AddEditProductViewModel.UiEvent.ShowSnackbar -> {
+                    snackbarHostState.showSnackbar(
+                        message = event.message
+                    )
+                }
+                is AddEditProductViewModel.UiEvent.SaveSuccess -> {
+                    onSave()
+                }
+            }
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) {
         Column(
             modifier = Modifier
                 .padding(it)
@@ -37,7 +73,8 @@ fun AddEditProductScreen(
                 onValueChange = viewModel::onCodeChange,
                 label = { Text("Código") },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !uiState.isEditing
+                enabled = !uiState.isEditing,
+                isError = uiState.code.isBlank()
             )
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -45,7 +82,8 @@ fun AddEditProductScreen(
                 value = uiState.name,
                 onValueChange = viewModel::onNameChange,
                 label = { Text("Nombre") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                isError = uiState.name.isBlank()
             )
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -54,7 +92,8 @@ fun AddEditProductScreen(
                 onValueChange = viewModel::onPriceChange,
                 label = { Text("Precio") },
                 modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                isError = uiState.price.toDoubleOrNull() == null || uiState.price.toDouble() <= 0.0
             )
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -93,10 +132,7 @@ fun AddEditProductScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
-                onClick = {
-                    viewModel.saveProduct()
-                    onSave()
-                },
+                onClick = viewModel::saveProduct,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Guardar")
