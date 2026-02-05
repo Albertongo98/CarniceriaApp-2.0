@@ -27,19 +27,15 @@ Este documento establece las reglas, principios y funciones críticas para el de
 ## 3. Plan de Trabajo (Post-Reparación)
 
 *   [x] **1. Reparar Compilación del Proyecto:**
-    *   Se actualizaron las dependencias de Gradle (AGP 8.5.2, Kotlin 2.0.21) y se corrigieron las versiones del SDK (target 34).
-    *   Se recrearon las `data class` perdidas (`TicketState`, `CartItem`).
-    *   Se corrigieron los errores de tipos en `TpvViewModel` al guardar en la base de datos.
-
-*   [x] **2. Implementar Indicador de Carga en Botón de Impresión:**
-    *   El botón "Imprimir y Guardar" ahora muestra un `CircularProgressIndicator` y se deshabilita durante el proceso de venta para evitar duplicados.
-
-*   [x] **3. Corregir Reimpresión en Historial:**
-    *   Se ajustó `HistoryViewModel` para reconstruir correctamente los `CartItem` a partir de `TicketItem`, distinguiendo entre ventas por pieza y por "precio manual".
-
-*   [x] **4. Ajustes de Impresión de Ticket:**
-    *   **Logo Eliminado:** El logo ya no se imprime por defecto para agilizar la impresión.
-    *   **QR Agrandado:** El tamaño del QR de control interno se incrementó en ~33% (módulo de 3 a 4) para mejorar la lectura.
+    *   Se actualizaron las dependencias de Gradle y se corrigieron errores de tipos.
+*   [x] **2. Implementar Indicador de Carga en Botón de Impresión.**
+*   [x] **3. Corregir Reimpresión en Historial.**
+*   [x] **4. Ajustes de Impresión de Ticket (Logo y QR).**
+*   [x] **5. Refactorización de UI y Teclado Inteligente (Smart Keyboard):**
+    *   Rediseño visual con colores de marca y optimización de espacios para Tablet.
+    *   Implementación de sugerencias dinámicas basadas en productos más vendidos (Top 10).
+    *   Fila de importes rápidos ($5 a $100) para agilizar el pesado por dinero.
+    *   Corrección de error fatal (crash) por duplicidad de llaves en la lista del ticket.
 
 ## 4. Gestión del Proyecto
 
