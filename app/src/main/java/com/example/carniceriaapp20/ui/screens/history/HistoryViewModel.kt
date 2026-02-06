@@ -25,7 +25,8 @@ data class HistoryUiState(
     val tickets: List<TicketWithItems> = emptyList(),
     val printResult: PrintResult? = null,
     val selectedTicketIds: Set<Long> = emptySet(),
-    val isSelectionMode: Boolean = false
+    val isSelectionMode: Boolean = false,
+    val isPrinting: Boolean = false
 )
 
 data class TicketWithItems(
@@ -46,17 +47,20 @@ class HistoryViewModel @Inject constructor(
     private val _printResult = MutableStateFlow<PrintResult?>(null)
     private val _ticketsWithItems = ticketRepository.getAllTicketsWithItems()
     private val _selectedTicketIds = MutableStateFlow<Set<Long>>(emptySet())
+    private val _isPrinting = MutableStateFlow(false)
 
     val uiState: StateFlow<HistoryUiState> = combine(
         _ticketsWithItems, 
         _printResult, 
-        _selectedTicketIds
-    ) { tickets, printResult, selectedIds ->
+        _selectedTicketIds,
+        _isPrinting
+    ) { tickets, printResult, selectedIds, printing ->
         HistoryUiState(
             tickets = tickets,
             printResult = printResult,
             selectedTicketIds = selectedIds,
-            isSelectionMode = selectedIds.isNotEmpty()
+            isSelectionMode = selectedIds.isNotEmpty(),
+            isPrinting = printing
         )
     }.stateIn(
         scope = viewModelScope,
@@ -65,6 +69,7 @@ class HistoryViewModel @Inject constructor(
     )
 
     fun toggleTicketSelection(ticketId: Long) { 
+        if (_isPrinting.value) return
         val currentSelection = _selectedTicketIds.value.toMutableSet()
         if (currentSelection.contains(ticketId)) {
             currentSelection.remove(ticketId)
@@ -79,43 +84,48 @@ class HistoryViewModel @Inject constructor(
     }
 
     fun printSelectedTicketsForAudit() {
+        if (_isPrinting.value) return
         val allTickets = uiState.value.tickets
         val selectedTickets = allTickets.filter { 
             _selectedTicketIds.value.contains(it.ticket.id)
-        }
+        }.sortedBy { it.ticket.timestamp } // Imprimir en orden cronológico
+
         if (selectedTickets.isEmpty()) return
 
         viewModelScope.launch {
+            _isPrinting.value = true
             var finalResult: PrintResult = PrintResult.Success
             withContext(Dispatchers.IO) {
                 for (ticketWithItems in selectedTickets) {
                     val cartItems = ticketWithItems.items.map { ticketItem ->
-                        // Detectar si era un precio manual (cuando unitPrice == totalPrice y cantidad != 1)
-                        val isManualPrice = abs(ticketItem.unitPrice - ticketItem.totalPrice) < 0.01 && ticketItem.quantity != 1.0
-                        val isProbablyGranel = ticketItem.quantity % 1.0 != 0.0 || isManualPrice
-
+                        val isProbablyGranel = ticketItem.quantity % 1.0 != 0.0 || ticketItem.unitPrice == ticketItem.totalPrice
+                        
                         CartItem(
                             product = Product(
                                 code = ticketItem.productCode ?: "",
                                 name = ticketItem.productName,
-                                price = if (isManualPrice) 0.0 else ticketItem.unitPrice,
+                                price = ticketItem.unitPrice,
                                 department = "", 
                                 unit = if(isProbablyGranel) ProductUnit.GRANEL else ProductUnit.UNIDAD
                             ),
                             quantity = ticketItem.quantity,
-                            customPrice = if (isManualPrice) ticketItem.totalPrice else null
+                            customPrice = if (ticketItem.unitPrice == ticketItem.totalPrice && ticketItem.quantity != 1.0) ticketItem.totalPrice else null
                         )
                     }
+                    
+                    // CORRECCIÓN: Usamos dailyFolio en lugar de ID de BD y formateamos a 3 dígitos
+                    val folioToPrint = ticketWithItems.ticket.dailyFolio.toString().padStart(3, '0')
                     
                     val printJobResult = printerHelper.printTicket(
                         ticket = ticketWithItems.ticket,
                         items = cartItems,
-                        folio = ticketWithItems.ticket.id.toString(),
-                        withLogo = false // Desactivamos el logo para el historial también
+                        folio = folioToPrint,
+                        withLogo = false 
                     )
 
                     if (printJobResult is PrintResult.Success) {
-                        delay(1500) // Regla de Oro: Flush Print
+                        // REGLA DE ORO: Pausa tras cada ticket para no saturar el buffer
+                        delay(1800) 
                         printerHelper.flushPrinter()
                     } else {
                         finalResult = printJobResult
@@ -124,6 +134,7 @@ class HistoryViewModel @Inject constructor(
                 }
             }
             _printResult.value = finalResult
+            _isPrinting.value = false
             if (finalResult is PrintResult.Success) clearSelection()
         }
     }

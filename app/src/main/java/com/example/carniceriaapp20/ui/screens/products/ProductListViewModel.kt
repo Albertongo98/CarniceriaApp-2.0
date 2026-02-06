@@ -17,10 +17,10 @@ class ProductListViewModel @Inject constructor(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    // Filtramos la lista de productos basada en la búsqueda
+    // Filtramos y ORDENAMOS alfabéticamente
     val products: StateFlow<List<Product>> = productRepository.getAllProducts()
         .combine(_searchQuery) { allProducts, query ->
-            if (query.isBlank()) {
+            val filtered = if (query.isBlank()) {
                 allProducts
             } else {
                 allProducts.filter { 
@@ -28,6 +28,8 @@ class ProductListViewModel @Inject constructor(
                     it.code.contains(query, ignoreCase = true) 
                 }
             }
+            // Ordenamos por nombre
+            filtered.sortedBy { it.name.lowercase() }
         }
         .stateIn(
             scope = viewModelScope,

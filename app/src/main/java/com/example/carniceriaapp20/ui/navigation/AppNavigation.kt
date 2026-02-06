@@ -34,7 +34,6 @@ fun AppNavigation() {
         composable(Routes.SPLASH) {
             SplashScreen(onTimeout = {
                 navController.navigate(Routes.TPV) {
-                    // Eliminamos el splash del historial para que no se pueda volver atrás con el botón de la tablet
                     popUpTo(Routes.SPLASH) { inclusive = true }
                 }
             })
@@ -44,6 +43,7 @@ fun AppNavigation() {
         }
         composable(Routes.PRODUCT_LIST) {
             ProductListScreen(
+                onNavigateBack = { navController.popBackStack() },
                 onAddProduct = {
                     navController.navigate(Routes.ADD_EDIT_PRODUCT)
                 },
@@ -69,13 +69,17 @@ fun AppNavigation() {
             SettingsScreen(navController = navController)
         }
         composable(Routes.HISTORY) {
-            HistoryScreen()
+            HistoryScreen(
+                onNavigateBack = { navController.popBackStack() } // CORREGIDO: Acción para volver
+            )
         }
         composable(Routes.UPDATE_FROM_CSV) {
             UpdateFromCsvScreen()
         }
         composable(Routes.LABEL_GENERATOR) {
-            LabelGeneratorScreen()
+            LabelGeneratorScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
     }
 }

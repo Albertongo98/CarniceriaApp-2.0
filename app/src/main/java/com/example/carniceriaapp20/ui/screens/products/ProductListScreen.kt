@@ -1,10 +1,13 @@
 package com.example.carniceriaapp20.ui.screens.products
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
@@ -12,14 +15,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.carniceriaapp20.data.local.Product
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProductListScreen(
+    onNavigateBack: () -> Unit,
     onAddProduct: () -> Unit,
     onEditProduct: (String) -> Unit,
     viewModel: ProductListViewModel = hiltViewModel()
@@ -30,18 +36,49 @@ fun ProductListScreen(
 
     Scaffold(
         topBar = {
-            Column(modifier = Modifier.fillMaxWidth().padding(top = 32.dp)) { // Margen para barra de sistema
-                Text(
-                    text = "Gestión de Productos",
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            TopAppBar(
+                title = { Text("Gestión de Productos", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onAddProduct,
+                containerColor = Color(0xFF1B5E20),
+                contentColor = Color.White
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Añadir Producto")
+            }
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            // Buscador estilizado (Mismo estilo que el TPV)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = viewModel::onSearchQueryChange,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Buscar por nombre o código...") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
@@ -51,18 +88,14 @@ fun ProductListScreen(
                             }
                         }
                     },
-                    shape = MaterialTheme.shapes.medium,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color.Transparent,
+                        unfocusedBorderColor = Color.Transparent
+                    ),
                     singleLine = true
                 )
             }
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = onAddProduct, containerColor = MaterialTheme.colorScheme.primary) {
-                Icon(Icons.Default.Add, contentDescription = "Añadir Producto", tint = MaterialTheme.colorScheme.onPrimary)
-            }
-        }
-    ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+
             if (products.isEmpty() && searchQuery.isNotEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No se encontraron productos", color = MaterialTheme.colorScheme.outline)
@@ -70,21 +103,22 @@ fun ProductListScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(products, key = { it.code }) { product ->
-                        ProductItem(
+                        ProductListItem(
                             product = product,
                             onEdit = { onEditProduct(product.code) },
                             onDelete = { showDialog = product }
                         )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     }
                 }
             }
         }
     }
 
+    // El Diálogo de eliminación se mantiene funcional pero con colores de alerta
     showDialog?.let { productToDelete ->
         AlertDialog(
             onDismissRequest = { showDialog = null },
@@ -111,37 +145,46 @@ fun ProductListScreen(
 }
 
 @Composable
-fun ProductItem(
+fun ProductListItem(
     product: Product,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    Surface(
+    OutlinedCard(
         onClick = onEdit,
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = product.name, 
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Row(modifier = Modifier.padding(top = 4.dp)) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = product.code, 
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Código: ${product.code}", 
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Text(
-                        text = "Unidad: ${product.unit}", 
+                        text = product.unit.toString(), 
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline
                     )
@@ -151,16 +194,21 @@ fun ProductItem(
             Text(
                 text = "$" + "%.2f".format(product.price), 
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 16.dp)
+                fontWeight = FontWeight.Black,
+                color = Color(0xFF1B5E20) // Verde bosque marca
             )
 
-            IconButton(onClick = onDelete) {
+            Spacer(modifier = Modifier.width(16.dp))
+
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+            ) {
                 Icon(
                     Icons.Default.Delete, 
                     contentDescription = "Eliminar", 
-                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
