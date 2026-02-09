@@ -129,9 +129,9 @@ fun TpvScreen(
 
             if (isTablet) {
                 HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
-                DynamicKeyboardPanel(modifier = Modifier.fillMaxWidth(), height = 380.dp, uiState = uiState, onQwertyKeyPress = viewModel::onQwertyKeyPress, onKeypadInput = viewModel::onKeypadInput, onClear = viewModel::onKeypadClear, onBackspace = viewModel::onKeypadBackspace, onApply = viewModel::onApplyKeypadInput, onProductClick = viewModel::addProductToCart, onAmountClick = viewModel::applyQuickAmount)
+                DynamicKeyboardPanel(modifier = Modifier.fillMaxWidth(), height = 380.dp, uiState = uiState, onQwertyKeyPress = viewModel::onQwertyKeyPress, onKeypadInput = viewModel::onKeypadInput, onClear = viewModel::onKeypadClear, onBackspace = viewModel::onKeypadBackspace, onApply = viewModel::onApplyKeypadInput, onApplyPieces = viewModel::applyEstimatedPieces, onProductClick = viewModel::addProductToCart, onAmountClick = viewModel::applyQuickAmount)
             } else if (uiState.selectedCartItem != null) {
-                PhoneEditBar(selectedItem = uiState.selectedCartItem!!, keypadInput = uiState.keypadInput, onKeypadInput = viewModel::onKeypadInput, onBackspace = viewModel::onKeypadBackspace, onApply = viewModel::onApplyKeypadInput, onCancel = { viewModel.onSelectItem(null) })
+                PhoneEditBar(selectedItem = uiState.selectedCartItem!!, keypadInput = uiState.keypadInput, onKeypadInput = viewModel::onKeypadInput, onBackspace = viewModel::onKeypadBackspace, onApply = viewModel::onApplyKeypadInput, onApplyPieces = viewModel::applyEstimatedPieces, onCancel = { viewModel.onSelectItem(null) })
             }
         }
     }
@@ -257,6 +257,15 @@ fun CartItemRow(item: CartItem, isSelected: Boolean, isTablet: Boolean, onClick:
                 val unitLabel = if(item.product.unit == ProductUnit.GRANEL) "kg" else "pz"
                 val quantityDisplay = if (item.product.unit == ProductUnit.GRANEL) (if (item.customPrice != null) "Manual" else "${String.format("%.3f", item.quantity)} kg") else "${item.quantity.toInt()} pz"
                 Text(quantityDisplay, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                
+                // MEJORA: Mostrar piezas estimadas si existen
+                if (item.estimatedPieces != null) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = RoundedCornerShape(4.dp)) {
+                        Text(" ${item.estimatedPieces} PZ ", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                    }
+                }
+
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("|", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
                 Spacer(modifier = Modifier.width(6.dp))
@@ -276,7 +285,7 @@ fun CartItemRow(item: CartItem, isSelected: Boolean, isTablet: Boolean, onClick:
 }
 
 @Composable
-fun PhoneEditBar(selectedItem: CartItem, keypadInput: String, onKeypadInput: (String) -> Unit, onBackspace: () -> Unit, onApply: (isPrice: Boolean) -> Unit, onCancel: () -> Unit) {
+fun PhoneEditBar(selectedItem: CartItem, keypadInput: String, onKeypadInput: (String) -> Unit, onBackspace: () -> Unit, onApply: (isPrice: Boolean) -> Unit, onApplyPieces: () -> Unit, onCancel: () -> Unit) {
     Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primaryContainer, tonalElevation = 8.dp) {
         Column(modifier = Modifier.padding(8.dp)) {
             val unitLabel = if(selectedItem.product.unit == ProductUnit.GRANEL) "KG" else "PZ"
@@ -288,8 +297,11 @@ fun PhoneEditBar(selectedItem: CartItem, keypadInput: String, onKeypadInput: (St
                     }
                 }
                 IconButton(onClick = onBackspace) { Icon(Icons.Default.Backspace, contentDescription = null, tint = MaterialTheme.colorScheme.error) }
-                Button(onClick = { onApply(false) }, shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 12.dp)) { Text("KG/PZ", fontSize = 12.sp) }
-                if (selectedItem.product.unit == ProductUnit.GRANEL) { Button(onClick = { onApply(true) }, shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 12.dp)) { Text("$", fontSize = 12.sp) } }
+                Button(onClick = { onApply(false) }, shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 8.dp)) { Text("KG/PZ", fontSize = 12.sp) }
+                if (selectedItem.product.unit == ProductUnit.GRANEL) { 
+                    Button(onClick = { onApply(true) }, shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 12.dp)) { Text("$", fontSize = 12.sp) } 
+                    Button(onClick = onApplyPieces, shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary), contentPadding = PaddingValues(horizontal = 12.dp)) { Text("+PZ", fontSize = 12.sp) }
+                }
                 IconButton(onClick = onCancel) { Icon(Icons.Default.Close, contentDescription = null) }
             }
             Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -302,20 +314,19 @@ fun PhoneEditBar(selectedItem: CartItem, keypadInput: String, onKeypadInput: (St
 }
 
 @Composable
-fun DynamicKeyboardPanel(modifier: Modifier = Modifier, height: androidx.compose.ui.unit.Dp, uiState: TpvUiState, onQwertyKeyPress: (String) -> Unit, onKeypadInput: (String) -> Unit, onClear: () -> Unit, onBackspace: () -> Unit, onApply: (isPrice: Boolean) -> Unit, onProductClick: (Product) -> Unit, onAmountClick: (Double) -> Unit) {
+fun DynamicKeyboardPanel(modifier: Modifier = Modifier, height: androidx.compose.ui.unit.Dp, uiState: TpvUiState, onQwertyKeyPress: (String) -> Unit, onKeypadInput: (String) -> Unit, onClear: () -> Unit, onBackspace: () -> Unit, onApply: (isPrice: Boolean) -> Unit, onApplyPieces: () -> Unit, onProductClick: (Product) -> Unit, onAmountClick: (Double) -> Unit) {
     Box(modifier.height(height).fillMaxWidth().background(MaterialTheme.colorScheme.surface)) { 
         when (uiState.activeKeyboard) {
             KeyboardType.QWERTY -> { QwertyKeyboard(modifier = Modifier.fillMaxSize(), fastProducts = uiState.fastProducts, onKeyPress = onQwertyKeyPress, onProductClick = onProductClick, onAmountClick = onAmountClick) }
-            KeyboardType.NUMERIC -> { KeypadWithActionsPanel(modifier = Modifier.fillMaxSize(), selectedItem = uiState.selectedCartItem, keypadInput = uiState.keypadInput, onKeypadInput = onKeypadInput, onClear = onClear, onBackspace = onBackspace, onApply = onApply) }
+            KeyboardType.NUMERIC -> { KeypadWithActionsPanel(modifier = Modifier.fillMaxSize(), selectedItem = uiState.selectedCartItem, keypadInput = uiState.keypadInput, onKeypadInput = onKeypadInput, onClear = onClear, onBackspace = onBackspace, onApply = onApply, onApplyPieces = onApplyPieces) }
             else -> { /* No keyboard */ }
         }
     }
 }
 
 @Composable
-fun KeypadWithActionsPanel(modifier: Modifier = Modifier, selectedItem: CartItem?, keypadInput: String, onKeypadInput: (String) -> Unit, onClear: () -> Unit, onBackspace: () -> Unit, onApply: (isPrice: Boolean) -> Unit) {
+fun KeypadWithActionsPanel(modifier: Modifier = Modifier, selectedItem: CartItem?, keypadInput: String, onKeypadInput: (String) -> Unit, onClear: () -> Unit, onBackspace: () -> Unit, onApply: (isPrice: Boolean) -> Unit, onApplyPieces: () -> Unit) {
     Column(modifier = modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-        // Encabezado más compacto para ganar espacio
         Surface(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f), shape = RoundedCornerShape(12.dp)) { 
             Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) { 
                 Column(modifier = Modifier.weight(1f)) { 
@@ -329,7 +340,6 @@ fun KeypadWithActionsPanel(modifier: Modifier = Modifier, selectedItem: CartItem
             } 
         }
         Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) { 
-            // Grid numérico con altura de botones ajustada (60.dp)
             LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.weight(0.65f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), userScrollEnabled = false) { 
                 val keys = listOf("7", "8", "9", "4", "5", "6", "1", "2", "3", ".", "0") ; 
                 items(keys) { key -> 
@@ -345,8 +355,14 @@ fun KeypadWithActionsPanel(modifier: Modifier = Modifier, selectedItem: CartItem
                 } 
             }
             Column(modifier = Modifier.weight(0.35f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) { 
-                Button(onClick = { onApply(false) }, enabled = selectedItem != null, modifier = Modifier.fillMaxWidth().weight(1f), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20))) { Text("PESAR\n(KG / PZ)", textAlign = TextAlign.Center, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, lineHeight = 16.sp) } ; 
+                Button(onClick = { onApply(false) }, enabled = selectedItem != null, modifier = Modifier.fillMaxWidth().weight(1f), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20))) { Text("PESAR\n(KG/PZ)", textAlign = TextAlign.Center, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, lineHeight = 16.sp) } ; 
                 Button(onClick = { onApply(true) }, enabled = selectedItem?.product?.unit == ProductUnit.GRANEL, modifier = Modifier.fillMaxWidth().weight(1f), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20))) { Text("IMPORTE\n($)", textAlign = TextAlign.Center, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, lineHeight = 16.sp) } ; 
+                
+                // NUEVO: Botón +PIEZAS (Solo visible si es a GRANEL)
+                if (selectedItem?.product?.unit == ProductUnit.GRANEL) {
+                    Button(onClick = onApplyPieces, modifier = Modifier.fillMaxWidth().weight(1f), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)) { Text("+ PIEZAS", textAlign = TextAlign.Center, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp) }
+                }
+
                 OutlinedButton(modifier = Modifier.fillMaxWidth().weight(0.7f), onClick = onClear, shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF1B5E20))) { Text("LIMPIAR", fontWeight = FontWeight.ExtraBold, color = Color(0xFF1B5E20), fontSize = 13.sp) } 
             } 
         }
@@ -390,7 +406,10 @@ fun ConfirmSaleDialog(ticket: TicketState, isPrinting: Boolean, onDismiss: () ->
                             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                 val qtyText = if(it.product.unit == ProductUnit.GRANEL) String.format("%.3f kg", it.quantity) else "${it.quantity.toInt()} pz"
                                 Text(it.product.name.uppercase(), fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
-                                Text("$qtyText | Subtotal: $" + "%.2f".format(it.totalPrice), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                
+                                // MOSTRAR PIEZAS ESTIMADAS EN RESUMEN
+                                val detailText = if (it.estimatedPieces != null) "$qtyText | ${it.estimatedPieces} pz | $" + "%.2f".format(it.totalPrice) else "$qtyText | $" + "%.2f".format(it.totalPrice)
+                                Text(detailText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }

@@ -108,7 +108,6 @@ class BluetoothPrinterHelper @Inject constructor(
             try {
                 val device = bluetoothAdapter?.getRemoteDevice(deviceAddress) ?: return PrintResult.Error("Dispositivo no encontrado")
                 
-                // Limpiar cualquier proceso previo de búsqueda
                 if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED) {
                     bluetoothAdapter?.cancelDiscovery()
                 }
@@ -116,7 +115,6 @@ class BluetoothPrinterHelper @Inject constructor(
                 socket = device.createInsecureRfcommSocketToServiceRecord(PRINTER_UUID)
                 withTimeout(10000) { socket.connect() }
                 
-                // HANDSHAKE ROBUSTO: Vital para que la impresora acepte los datos
                 delay(1200) 
                 
                 val outputStream = socket.outputStream
@@ -124,7 +122,6 @@ class BluetoothPrinterHelper @Inject constructor(
                 outputStream.flush()
                 delay(100)
                 
-                // RITMO DE DATOS CONTROLADO
                 val chunkSize = 64
                 var offset = 0
                 while (offset < data.size) {
@@ -135,10 +132,9 @@ class BluetoothPrinterHelper @Inject constructor(
                     delay(60) 
                 }
                 
-                // SINCRONIZACIÓN FÍSICA: Esperar a que el hardware termine antes de cerrar el socket
-                outputStream.write(byteArrayOf(0x0A, 0x0A))
+                outputStream.write(CMD_INIT)
                 outputStream.flush()
-                delay(2500) // TIEMPO CRÍTICO DE VACIADO
+                delay(2000) 
                 
                 socket.close()
                 return PrintResult.Success
@@ -149,7 +145,7 @@ class BluetoothPrinterHelper @Inject constructor(
                 delay(1500) 
             }
         }
-        return PrintResult.Error("Fallo tras reintentos: $lastError")
+        return PrintResult.Error("Fallo de hardware tras reintentos: $lastError")
     }
 
     private fun buildTicketData(ticket: Ticket, items: List<CartItem>, folio: String): ByteArray {
@@ -173,6 +169,7 @@ class BluetoothPrinterHelper @Inject constructor(
                 write(("${if (cleanName.length > 20) cleanName.take(20) else cleanName} (${item.product.code.padStart(4, '0')})\n").toByteArray(charset))
                 write(CMD_BOLD_OFF)
 
+                // RESTAURADO: Ayuda visual grande para piezas múltiples (REGLA DE ORO)
                 if (item.product.unit == ProductUnit.UNIDAD && item.quantity >= 2) {
                     write(CMD_ALIGN_CENTER)
                     write(CMD_BOLD_ON)
@@ -184,22 +181,28 @@ class BluetoothPrinterHelper @Inject constructor(
                 }
 
                 val cantidadStr = if (item.product.unit == ProductUnit.GRANEL) "%.3f kg".format(item.quantity) else "${item.quantity.toInt()} un."
+                val despacharStr = if (item.estimatedPieces != null) "$cantidadStr (*${item.estimatedPieces} PZ)" else cantidadStr
+                
                 val montoItemStr = currencyFormat.format(item.totalPrice)
-                val spaces = 32 - cantidadStr.length - montoItemStr.length
-                val itemLine = if (spaces > 0) cantidadStr + " ".repeat(spaces) + montoItemStr else (cantidadStr + " " + montoItemStr).take(32)
+                val spaces = 32 - despacharStr.length - montoItemStr.length
+                val itemLine = if (spaces > 0) despacharStr + " ".repeat(spaces) + montoItemStr else (despacharStr + " " + montoItemStr).take(32)
                 write((itemLine + "\n").toByteArray(charset))
                 
                 try {
                     write(CMD_ALIGN_CENTER)
-                    printBarcode(this, item.product.code, type = 73, height = 45) 
+                    // REGLA DE ORO: Generar código EAN-13 con precio para productos a GRANEL
+                    val codeToPrint = if (item.product.unit == ProductUnit.GRANEL) {
+                        generarCodigoParaPOS(item.product.code, item.totalPrice)
+                    } else {
+                        item.product.code
+                    }
+                    printBarcode(this, codeToPrint, type = 73, height = 45) 
                     write(CMD_ALIGN_LEFT)
                     write("\n".toByteArray())
                 } catch (e: Exception) { }
             }
 
             write("--------------------------------\n".toByteArray(charset))
-            
-            // MEJORA: Conteo de productos impreso
             write(CMD_ALIGN_LEFT)
             write("PRODUCTOS: ${items.size}\n".toByteArray(charset))
             
@@ -241,6 +244,12 @@ class BluetoothPrinterHelper @Inject constructor(
         outputStream.write(byteArrayOf(0x1D, 0x48, 2.toByte())) 
         outputStream.write(byteArrayOf(0x1D, 0x6B, type.toByte(), dataBytes.size.toByte()))
         outputStream.write(dataBytes)
+    }
+
+    private fun generarCodigoParaPOS(code: String, price: Double): String {
+        val cleanCode = code.padStart(4, '0')
+        val priceInCents = (price * 100).toInt().toString().padStart(5, '0')
+        return "200$cleanCode${priceInCents}5"
     }
 
     private fun generarCodigoControlInterno(timestamp: Long, folio: String, total: Double): String {

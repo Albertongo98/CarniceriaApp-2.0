@@ -4,10 +4,11 @@ import com.example.carniceriaapp20.data.local.Product
 import java.util.UUID
 
 data class CartItem(
-    val id: String = UUID.randomUUID().toString(), // Genera un ID único para evitar choques en la UI
+    val id: String = UUID.randomUUID().toString(),
     val product: Product,
     val quantity: Double = 1.0,
-    val customPrice: Double? = null
+    val customPrice: Double? = null,
+    val estimatedPieces: Int? = null // NUEVO: Piezas pedidas (ej: 3 chiles)
 ) {
     val totalPrice: Double
         get() = customPrice ?: (product.price * quantity)

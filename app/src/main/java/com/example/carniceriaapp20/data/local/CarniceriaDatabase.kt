@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [Product::class, Ticket::class, TicketItem::class, LabelHistory::class],
-    version = 2, // Incremetamos la versión para aplicar cambios
+    version = 3, // INCREMENTADO A 3 para soportar el campo estimated_pieces
     exportSchema = false
 )
 abstract class CarniceriaDatabase : RoomDatabase() {

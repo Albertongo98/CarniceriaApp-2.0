@@ -28,7 +28,7 @@ Este documento establece las reglas, principios y funciones críticas para el de
 
 -   **`generarCodigoParaPOS`**: Genera el código EAN-13 para productos a granel. Formato: `"200" + [código de producto 4 dígitos] + [precio total 5 dígitos] + "5"`.
 -   **`generarCodigoControlInterno`**: Genera el QR de auditoría. Formato: `HHMMSS-FFF-MMMM.CC`.
--   **`getTopSellingProducts(calendar.timeInMillis)`**: Calcula la moda de productos **solo del día actual** para el teclado inteligente.
+-   **`applyEstimatedPieces`**: Permite anotar unidades físicas para productos vendidos por peso, facilitando el despacho masivo.
 
 ## 3. Plan de Trabajo (Post-Reparación)
 
@@ -39,13 +39,16 @@ Este documento establece las reglas, principios y funciones críticas para el de
 *   [x] **5. Refactorización de UI y Teclado Inteligente (Smart Keyboard):**
     *   Rediseño visual optimizado para Tablet (380dp de altura).
     *   Sugerencias dinámicas diarias e importes rápidos con indicadores de scroll visual.
-    *   Ayuda visual de precios unitarios directamente en la lista del ticket.
 *   [x] **6. Automatización y Mantenimiento (Offline-First):**
     *   Reinicio automático de folios diarios (001, 002...).
     *   Limpieza automática de tickets mayores a 48 horas al arrancar la app.
 *   [x] **7. Blindaje de Impresión en Producción:**
     *   Solución definitiva al fallo de segunda impresión mediante Flush de Hardware.
     *   Inclusión de conteo de productos impreso (`PRODUCTOS: N`).
+*   [x] **8. Notas de Despacho Masivo (Contador de Piezas):**
+    *   Implementación de `estimatedPieces` en modelo y BD (v3).
+    *   Botón "+ PIEZAS" en teclado numérico para productos a granel.
+    *   Visualización de piezas estimadas en ticket impreso y resumen de venta.
 
 ## 4. Gestión del Proyecto
 

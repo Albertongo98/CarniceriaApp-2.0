@@ -18,7 +18,7 @@ import androidx.room.PrimaryKey
             entity = Product::class,
             parentColumns = ["code"],
             childColumns = ["product_code"],
-            onDelete = ForeignKey.SET_NULL // Keep historical data even if product is deleted
+            onDelete = ForeignKey.SET_NULL
         )
     ]
 )
@@ -42,5 +42,8 @@ data class TicketItem(
     val unitPrice: Double,
 
     @ColumnInfo(name = "total_price")
-    val totalPrice: Double
+    val totalPrice: Double,
+
+    @ColumnInfo(name = "estimated_pieces") // NUEVO: Para notas de despacho
+    val estimatedPieces: Int? = null
 )

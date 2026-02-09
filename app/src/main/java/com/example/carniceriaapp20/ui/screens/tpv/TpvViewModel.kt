@@ -131,7 +131,8 @@ class TpvViewModel @Inject constructor(
                         productName = it.product.name,
                         quantity = it.quantity,
                         unitPrice = it.customPrice ?: it.product.price,
-                        totalPrice = it.totalPrice
+                        totalPrice = it.totalPrice,
+                        estimatedPieces = it.estimatedPieces // NUEVO: Guardar piezas estimadas
                     )
                 })
 
@@ -148,6 +149,25 @@ class TpvViewModel @Inject constructor(
                 _isPrinting.value = false
             }
         }
+    }
+
+    // NUEVO: Función para aplicar piezas estimadas a un producto a granel
+    fun applyEstimatedPieces() {
+        val inputAsInt = _keypadInput.value.toIntOrNull() ?: return
+        val selectedItem = _selectedCartItem.value ?: return
+        
+        val currentTickets = _tickets.value.toMutableList()
+        val activeTicketIndex = _activeTicketIndex.value
+        val activeTicket = currentTickets[activeTicketIndex]
+        val newItems = activeTicket.items.toMutableList()
+        val itemIndex = newItems.indexOf(selectedItem)
+        
+        if (itemIndex != -1) {
+            newItems[itemIndex] = selectedItem.copy(estimatedPieces = inputAsInt)
+            currentTickets[activeTicketIndex] = activeTicket.copy(items = newItems)
+            _tickets.value = currentTickets
+        }
+        onSelectItem(null)
     }
 
     fun applyQuickAmount(amount: Double) {
@@ -318,7 +338,7 @@ class TpvViewModel @Inject constructor(
                                 department = "Desconocido",
                                 unit = if (ticketItem.quantity % 1.0 != 0.0) ProductUnit.GRANEL else ProductUnit.UNIDAD
                             )
-                            CartItem(product = product, quantity = ticketItem.quantity)
+                            CartItem(product = product, quantity = ticketItem.quantity, estimatedPieces = ticketItem.estimatedPieces)
                         }
                         withContext(Dispatchers.IO) {
                             val result = printerHelper.printTicket(lastTicketWithItems.ticket, cartItems, lastTicketWithItems.ticket.dailyFolio.toString().padStart(3, '0'))
