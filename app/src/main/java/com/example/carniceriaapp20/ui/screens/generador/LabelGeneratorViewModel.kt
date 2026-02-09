@@ -25,7 +25,7 @@ data class LabelGeneratorUiState(
     val formPrice: String = "",
     val formCode: String = "",
     val printResult: PrintResult? = null,
-    val productToPrint: Any? = null, // Can be LabelHistory or a new one
+    val productToPrint: Any? = null, 
     val showQuantityDialog: Boolean = false
 )
 
@@ -103,20 +103,13 @@ class LabelGeneratorViewModel @Inject constructor(
         viewModelScope.launch {
             var finalResult: PrintResult = PrintResult.Success
             withContext(Dispatchers.IO) {
-                for (i in 1..quantityToPrint) {
-                    val result = printerHelper.printEtiqueta(etiqueta, 1)
-                    if (result is PrintResult.Success) {
-                        delay(400) // Shorter delay for labels
-                        printerHelper.flushPrinter()
-                    } else {
-                        finalResult = result
-                        break // Stop on first error
-                    }
-                }
+                // Ahora mandamos todas las etiquetas en una sola orden protegida por el Mutex
+                // En lugar de hacer un loop externo, el Helper ya maneja la seguridad.
+                val result = printerHelper.printEtiqueta(etiqueta, quantityToPrint)
+                finalResult = result
             }
             _uiState.update { it.copy(printResult = finalResult) }
 
-            // If printing was successful and it was a new label, save it.
             if (finalResult is PrintResult.Success && productToPrint is EtiquetaProducto) {
                 val labelToSave = LabelHistory(name = etiqueta.nombre, price = etiqueta.precio, code = etiqueta.codigo)
                 labelHistoryRepository.insertLabel(labelToSave)

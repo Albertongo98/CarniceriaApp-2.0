@@ -2,12 +2,11 @@ package com.example.carniceriaapp20.ui.screens.history
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.room.Embedded
-import androidx.room.Relation
 import com.example.carniceriaapp20.data.local.Product
 import com.example.carniceriaapp20.data.local.ProductUnit
 import com.example.carniceriaapp20.data.local.Ticket
 import com.example.carniceriaapp20.data.local.TicketItem
+import com.example.carniceriaapp20.data.local.TicketWithItems
 import com.example.carniceriaapp20.data.repository.TicketRepository
 import com.example.carniceriaapp20.ui.screens.tpv.CartItem
 import com.example.carniceriaapp20.util.BluetoothPrinterHelper
@@ -27,15 +26,6 @@ data class HistoryUiState(
     val selectedTicketIds: Set<Long> = emptySet(),
     val isSelectionMode: Boolean = false,
     val isPrinting: Boolean = false
-)
-
-data class TicketWithItems(
-    @Embedded val ticket: Ticket,
-    @Relation(
-        parentColumn = "id",
-        entityColumn = "ticket_id"
-    )
-    val items: List<TicketItem>
 )
 
 @HiltViewModel
@@ -88,51 +78,35 @@ class HistoryViewModel @Inject constructor(
         val allTickets = uiState.value.tickets
         val selectedTickets = allTickets.filter { 
             _selectedTicketIds.value.contains(it.ticket.id)
-        }.sortedBy { it.ticket.timestamp } // Imprimir en orden cronológico
+        }.sortedBy { it.ticket.timestamp } 
 
         if (selectedTickets.isEmpty()) return
 
         viewModelScope.launch {
             _isPrinting.value = true
-            var finalResult: PrintResult = PrintResult.Success
-            withContext(Dispatchers.IO) {
-                for (ticketWithItems in selectedTickets) {
-                    val cartItems = ticketWithItems.items.map { ticketItem ->
-                        val isProbablyGranel = ticketItem.quantity % 1.0 != 0.0 || ticketItem.unitPrice == ticketItem.totalPrice
-                        
-                        CartItem(
-                            product = Product(
-                                code = ticketItem.productCode ?: "",
-                                name = ticketItem.productName,
-                                price = ticketItem.unitPrice,
-                                department = "", 
-                                unit = if(isProbablyGranel) ProductUnit.GRANEL else ProductUnit.UNIDAD
-                            ),
-                            quantity = ticketItem.quantity,
-                            customPrice = if (ticketItem.unitPrice == ticketItem.totalPrice && ticketItem.quantity != 1.0) ticketItem.totalPrice else null
-                        )
-                    }
-                    
-                    // CORRECCIÓN: Usamos dailyFolio en lugar de ID de BD y formateamos a 3 dígitos
-                    val folioToPrint = ticketWithItems.ticket.dailyFolio.toString().padStart(3, '0')
-                    
-                    val printJobResult = printerHelper.printTicket(
-                        ticket = ticketWithItems.ticket,
-                        items = cartItems,
-                        folio = folioToPrint,
-                        withLogo = false 
+            
+            val batchData = selectedTickets.map { ticketWithItems ->
+                val cartItems = ticketWithItems.items.map { ticketItem ->
+                    val isProbablyGranel = ticketItem.quantity % 1.0 != 0.0 || ticketItem.unitPrice == ticketItem.totalPrice
+                    CartItem(
+                        product = Product(
+                            code = ticketItem.productCode ?: "",
+                            name = ticketItem.productName,
+                            price = ticketItem.unitPrice,
+                            department = "", 
+                            unit = if(isProbablyGranel) ProductUnit.GRANEL else ProductUnit.UNIDAD
+                        ),
+                        quantity = ticketItem.quantity,
+                        customPrice = if (ticketItem.unitPrice == ticketItem.totalPrice && ticketItem.quantity != 1.0) ticketItem.totalPrice else null
                     )
-
-                    if (printJobResult is PrintResult.Success) {
-                        // REGLA DE ORO: Pausa tras cada ticket para no saturar el buffer
-                        delay(1800) 
-                        printerHelper.flushPrinter()
-                    } else {
-                        finalResult = printJobResult
-                        break
-                    }
                 }
+                Pair(ticketWithItems.ticket, cartItems)
             }
+
+            val finalResult = withContext(Dispatchers.IO) {
+                printerHelper.printTicketsBatch(batchData)
+            }
+
             _printResult.value = finalResult
             _isPrinting.value = false
             if (finalResult is PrintResult.Success) clearSelection()

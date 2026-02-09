@@ -44,13 +44,11 @@ class TpvViewModel @Inject constructor(
     private val _pairedDevices = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     private val _selectedPrinterMac = userPreferencesRepository.printerMacAddress
 
-    // SUGERENCIAS: Emitimos vacío al inicio para no bloquear el arranque
     private val _fastProducts = productRepository.getTopSellingProducts()
         .onStart { emit(emptyList()) }
         .catch { emit(emptyList()) }
 
     init {
-        // Ejecutamos mantenimiento con un retraso para no saturar el inicio
         viewModelScope.launch {
             delay(5000) 
             performMaintenance()
@@ -62,7 +60,7 @@ class TpvViewModel @Inject constructor(
             try {
                 val twoDaysAgo = System.currentTimeMillis() - (2 * 24 * 60 * 60 * 1000L)
                 ticketRepository.deleteTicketsOlderThan(twoDaysAgo)
-            } catch (e: Exception) { /* Silencioso */ }
+            } catch (e: Exception) { }
         }
     }
 
@@ -78,7 +76,6 @@ class TpvViewModel @Inject constructor(
         } catch (e: Exception) { 1 }
     }
 
-    // uiState optimizado para ser reactivo e instantáneo
     val uiState: StateFlow<TpvUiState> = combine(
         productRepository.getAllProducts().onStart { emit(emptyList()) }.catch { emit(emptyList()) },
         _searchQuery,
@@ -86,7 +83,6 @@ class TpvViewModel @Inject constructor(
         _activeTicketIndex,
         _selectedCartItem
     ) { allProducts, query, tickets, activeIndex, selectedItem ->
-        // Realizamos el filtrado pesado en un bloque que permita ser fluido
         val filtered = allProducts
             .filter { it.name.contains(query, ignoreCase = true) || it.code.contains(query, ignoreCase = true) }
             .groupBy { it.department }
@@ -109,7 +105,7 @@ class TpvViewModel @Inject constructor(
     .combine(_pairedDevices) { state, devices -> state.copy(pairedDevices = devices) }
     .combine(_selectedPrinterMac.onStart { emit(null) }.catch { emit(null) }) { state, mac -> state.copy(selectedPrinterMac = mac) }
     .combine(_printResult) { state, result -> state.copy(printResult = result) }
-    .flowOn(Dispatchers.Default) // Procesamiento pesado fuera del hilo principal
+    .flowOn(Dispatchers.Default)
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TpvUiState())
 
     fun confirmSale() {
@@ -140,11 +136,7 @@ class TpvViewModel @Inject constructor(
                 })
 
                 withContext(Dispatchers.IO) {
-                    var finalResult = printerHelper.printTicket(ticket.copy(id = savedTicketId), activeTicketState.items, nextFolio.toString().padStart(3, '0'))
-                    if (finalResult is PrintResult.Success) {
-                        printerHelper.flushPrinter()
-                        delay(1500)
-                    }
+                    val finalResult = printerHelper.printTicket(ticket.copy(id = savedTicketId), activeTicketState.items, nextFolio.toString().padStart(3, '0'))
                     _printResult.value = finalResult
                 }
                 
@@ -329,9 +321,8 @@ class TpvViewModel @Inject constructor(
                             CartItem(product = product, quantity = ticketItem.quantity)
                         }
                         withContext(Dispatchers.IO) {
-                            printerHelper.printTicket(lastTicketWithItems.ticket, cartItems, lastTicketWithItems.ticket.dailyFolio.toString().padStart(3, '0'))
-                            printerHelper.flushPrinter()
-                            delay(1500)
+                            val result = printerHelper.printTicket(lastTicketWithItems.ticket, cartItems, lastTicketWithItems.ticket.dailyFolio.toString().padStart(3, '0'))
+                            _printResult.value = result
                         }
                     }
                 }

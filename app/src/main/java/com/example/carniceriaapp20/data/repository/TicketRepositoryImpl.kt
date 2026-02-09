@@ -3,7 +3,7 @@ package com.example.carniceriaapp20.data.repository
 import com.example.carniceriaapp20.data.local.Ticket
 import com.example.carniceriaapp20.data.local.TicketDao
 import com.example.carniceriaapp20.data.local.TicketItem
-import com.example.carniceriaapp20.ui.screens.history.TicketWithItems
+import com.example.carniceriaapp20.data.local.TicketWithItems
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 

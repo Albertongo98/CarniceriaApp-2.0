@@ -1,7 +1,6 @@
 package com.example.carniceriaapp20.data.local
 
 import androidx.room.*
-import com.example.carniceriaapp20.ui.screens.history.TicketWithItems
 import kotlinx.coroutines.flow.Flow
 
 @Dao

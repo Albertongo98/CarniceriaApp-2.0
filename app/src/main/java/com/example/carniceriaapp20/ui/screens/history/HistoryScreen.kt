@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.carniceriaapp20.data.local.TicketWithItems
 import com.example.carniceriaapp20.util.PrintResult
 import java.text.SimpleDateFormat
 import java.util.*
@@ -36,10 +37,10 @@ fun HistoryScreen(
     var showPreviewDialog by remember { mutableStateOf<TicketWithItems?>(null) }
 
     LaunchedEffect(key1 = uiState.printResult) {
-        uiState.printResult?.let {
-            val message = when (it) {
+        uiState.printResult?.let { result ->
+            val message = when (result) {
                 is PrintResult.Success -> "Impresión enviada correctamente"
-                is PrintResult.Error -> "Error de impresión: ${it.message}"
+                is PrintResult.Error -> "Error de impresión: ${result.message}"
             }
             snackbarHostState.showSnackbar(message)
             viewModel.onPrintResultConsumed()
@@ -152,7 +153,7 @@ fun HistoryScreen(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class) // CORREGIDO: Anotación específica aquí
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TicketListItem(
     ticketWithItems: TicketWithItems,
