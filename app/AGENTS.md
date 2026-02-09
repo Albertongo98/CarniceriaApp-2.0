@@ -11,18 +11,24 @@ Este documento establece las reglas, principios y funciones críticas para el de
 3.  **Inyección de Dependencias con Hilt:** Todas las dependencias son gestionadas por Hilt.
 4.  **Asincronía con Coroutines y Flow:** Todas las operaciones de BD, red o impresión se ejecutan en coroutines.
 
-### 1.2. Regla de Oro: El Flush Print
+### 1.2. Regla de Oro: Sincronización de Hardware (Bluetooth)
 
-**El "Flush Print" es una pausa obligatoria de 1.5 segundos que debe realizarse *después* de cada impresión de ticket.** Esta regla previene el sobrecalentamiento del cabezal de la impresora y la corrupción de datos. Es una regla de hardware crítica.
+**Es obligatorio respetar los tiempos físicos de la impresora de 57mm:**
+- **Handshake Inicial:** Espera de 1.2 segundos tras conectar antes de enviar datos.
+- **Release Seguro (Flush):** Pausa obligatoria de 2.5 segundos *antes* de cerrar el socket para permitir que el papel termine de salir.
+- **Ritmo de Datos:** Envío en paquetes de 32 bytes con 50ms de delay para evitar saturar el buffer del hardware.
 
-### 1.3. Regla de Oro: Botón de Impresión Único
+### 1.3. Regla de Oro: Flujo de Despacho Profesional
 
-**El botón "Imprimir y Guardar" debe ser a prueba de múltiples clics.** Al presionarlo, debe mostrar inmediatamente un indicador de carga y deshabilitarse para prevenir la creación de tickets duplicados. Cualquier clic posterior mientras está en estado de "imprimiendo" será ignorado.
+**El sistema no es una caja registradora, es una estación de despacho:**
+- El botón principal debe decir **"FINALIZAR"** o **"GENERAR TICKET"**.
+- Antes de imprimir, es obligatorio mostrar el **Diálogo de Confirmación Centrado** para que el operario valide verbalmente los productos y el total con el cliente.
 
 ## 2. Funciones Críticas (Sagradas)
 
 -   **`generarCodigoParaPOS`**: Genera el código EAN-13 para productos a granel. Formato: `"200" + [código de producto 4 dígitos] + [precio total 5 dígitos] + "5"`.
 -   **`generarCodigoControlInterno`**: Genera el QR de auditoría. Formato: `HHMMSS-FFF-MMMM.CC`.
+-   **`getTopSellingProducts(calendar.timeInMillis)`**: Calcula la moda de productos **solo del día actual** para el teclado inteligente.
 
 ## 3. Plan de Trabajo (Post-Reparación)
 
@@ -31,12 +37,15 @@ Este documento establece las reglas, principios y funciones críticas para el de
 *   [x] **3. Corregir Reimpresión en Historial.**
 *   [x] **4. Ajustes de Impresión de Ticket (Logo y QR).**
 *   [x] **5. Refactorización de UI y Teclado Inteligente (Smart Keyboard):**
-    *   Rediseño visual optimizado para Tablet.
-    *   Sugerencias dinámicas (Top 10 ventas) e importes rápidos ($5-$100).
-    *   Solución a crash por duplicidad de ítems en ticket.
+    *   Rediseño visual optimizado para Tablet (380dp de altura).
+    *   Sugerencias dinámicas diarias e importes rápidos con indicadores de scroll visual.
+    *   Ayuda visual de precios unitarios directamente en la lista del ticket.
 *   [x] **6. Automatización y Mantenimiento (Offline-First):**
     *   Reinicio automático de folios diarios (001, 002...).
     *   Limpieza automática de tickets mayores a 48 horas al arrancar la app.
+*   [x] **7. Blindaje de Impresión en Producción:**
+    *   Solución definitiva al fallo de segunda impresión mediante Flush de Hardware.
+    *   Inclusión de conteo de productos impreso (`PRODUCTOS: N`).
 
 ## 4. Gestión del Proyecto
 

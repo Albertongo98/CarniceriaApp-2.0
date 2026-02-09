@@ -4,6 +4,7 @@ import com.example.carniceriaapp20.data.local.Product
 import com.example.carniceriaapp20.data.local.ProductDao
 import com.example.carniceriaapp20.data.local.TicketDao
 import kotlinx.coroutines.flow.Flow
+import java.util.Calendar
 import javax.inject.Inject
 
 class ProductRepositoryImpl @Inject constructor(
@@ -36,6 +37,13 @@ class ProductRepositoryImpl @Inject constructor(
     }
 
     override fun getTopSellingProducts(): Flow<List<Product>> {
-        return ticketDao.getTopSellingProducts()
+        // Calculamos el inicio del día actual (00:00:00) para la moda dinámica
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        return ticketDao.getTopSellingProducts(calendar.timeInMillis)
     }
 }

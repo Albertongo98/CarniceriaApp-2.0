@@ -60,8 +60,7 @@ class BluetoothPrinterHelper @Inject constructor(
         private val CMD_BOLD_OFF: ByteArray = byteArrayOf(0x1B, 0x45, 0)
         private val CMD_DOUBLE_SIZE_ON: ByteArray = byteArrayOf(0x1D, 0x21, 0x11)
         private val CMD_NORMAL_SIZE: ByteArray = byteArrayOf(0x1D, 0x21, 0x00)
-        private val CMD_FEED_PAPER: ByteArray = byteArrayOf(0x1B, 0x64, 6) 
-        private val CMD_CLEANER_FEED: ByteArray = byteArrayOf(0x1B, 0x4A, 32)
+        private val CMD_FEED_PAPER: ByteArray = byteArrayOf(0x1B, 0x64, 5) 
     }
 
     @SuppressLint("MissingPermission")
@@ -72,6 +71,7 @@ class BluetoothPrinterHelper @Inject constructor(
 
     suspend fun printTicket(ticket: Ticket, items: List<CartItem>, folio: String): PrintResult = printMutex.withLock {
         val deviceAddress = userPreferencesRepository.printerMacAddress.first() ?: return PrintResult.Error("Impresora no configurada")
+        
         return withContext(Dispatchers.IO) {
             try {
                 val data = buildTicketData(ticket, items, folio)
@@ -96,7 +96,7 @@ class BluetoothPrinterHelper @Inject constructor(
                 }
             }
             if (result is PrintResult.Error) return result
-            delay(200) // ACELERADO: Pausa mínima entre tickets
+            delay(1000) 
         }
         return PrintResult.Success
     }
@@ -107,37 +107,46 @@ class BluetoothPrinterHelper @Inject constructor(
             var socket: BluetoothSocket? = null
             try {
                 val device = bluetoothAdapter?.getRemoteDevice(deviceAddress) ?: return PrintResult.Error("Dispositivo no encontrado")
-                socket = device.createInsecureRfcommSocketToServiceRecord(PRINTER_UUID)
                 
+                // Limpiar cualquier proceso previo de búsqueda
+                if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED) {
+                    bluetoothAdapter?.cancelDiscovery()
+                }
+
+                socket = device.createInsecureRfcommSocketToServiceRecord(PRINTER_UUID)
                 withTimeout(10000) { socket.connect() }
-                delay(300) // ACELERADO: Handshake rápido
+                
+                // HANDSHAKE ROBUSTO: Vital para que la impresora acepte los datos
+                delay(1200) 
                 
                 val outputStream = socket.outputStream
-                outputStream.write(CMD_INIT) 
+                outputStream.write(CMD_INIT)
+                outputStream.flush()
+                delay(100)
                 
-                val chunkSize = 64 
+                // RITMO DE DATOS CONTROLADO
+                val chunkSize = 64
                 var offset = 0
                 while (offset < data.size) {
                     val length = if (data.size - offset < chunkSize) data.size - offset else chunkSize
                     outputStream.write(data, offset, length)
                     outputStream.flush()
                     offset += length
-                    delay(50) // ACELERADO: Delay mínimo entre chunks
+                    delay(60) 
                 }
                 
-                // SALTO FÍSICO FINAL ACELERADO
-                delay(100) 
-                outputStream.write(CMD_CLEANER_FEED)
+                // SINCRONIZACIÓN FÍSICA: Esperar a que el hardware termine antes de cerrar el socket
+                outputStream.write(byteArrayOf(0x0A, 0x0A))
                 outputStream.flush()
+                delay(2500) // TIEMPO CRÍTICO DE VACIADO
                 
-                delay(300) // Tiempo justo para el motor
                 socket.close()
                 return PrintResult.Success
             } catch (e: Exception) {
                 Log.e(TAG, "Fallo intento ${attempt + 1}: ${e.message}")
                 lastError = e.message ?: "Error de comunicación"
                 try { socket?.close() } catch (ex: Exception) {}
-                delay(800) 
+                delay(1500) 
             }
         }
         return PrintResult.Error("Fallo tras reintentos: $lastError")
@@ -182,14 +191,18 @@ class BluetoothPrinterHelper @Inject constructor(
                 
                 try {
                     write(CMD_ALIGN_CENTER)
-                    val codeToPrint = if (item.product.unit == ProductUnit.GRANEL) generarCodigoParaPOS(item.product.code, item.totalPrice) else item.product.code
-                    printBarcode(this, codeToPrint, type = 73, height = 45) 
+                    printBarcode(this, item.product.code, type = 73, height = 45) 
                     write(CMD_ALIGN_LEFT)
                     write("\n".toByteArray())
                 } catch (e: Exception) { }
             }
 
             write("--------------------------------\n".toByteArray(charset))
+            
+            // MEJORA: Conteo de productos impreso
+            write(CMD_ALIGN_LEFT)
+            write("PRODUCTOS: ${items.size}\n".toByteArray(charset))
+            
             write(CMD_ALIGN_RIGHT)
             write("TOTAL: ".toByteArray(charset))
             write(CMD_DOUBLE_SIZE_ON)
@@ -230,12 +243,6 @@ class BluetoothPrinterHelper @Inject constructor(
         outputStream.write(dataBytes)
     }
 
-    private fun generarCodigoParaPOS(code: String, price: Double): String {
-        val cleanCode = code.padStart(4, '0')
-        val priceInCents = (price * 100).toInt().toString().padStart(5, '0')
-        return "200$cleanCode${priceInCents}5"
-    }
-
     private fun generarCodigoControlInterno(timestamp: Long, folio: String, total: Double): String {
         val sdf = SimpleDateFormat("HHmmss", Locale.getDefault())
         val time = sdf.format(Date(timestamp))
@@ -260,7 +267,7 @@ class BluetoothPrinterHelper @Inject constructor(
                         write(CMD_FEED_PAPER)
                     }
                     sendDataToDeviceWithRetry(deviceAddress, baos.toByteArray())
-                    delay(200)
+                    delay(500)
                 }
                 PrintResult.Success
             } catch (e: Exception) { PrintResult.Error("Error: ${e.message}") }

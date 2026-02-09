@@ -23,28 +23,24 @@ interface TicketDao {
     @Query("SELECT * FROM tickets ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLastTicket(): Ticket?
 
+    // MODIFICADO: Ahora solo cuenta las ventas desde el inicio del día para la moda dinámica
     @Query("""
         SELECT p.* FROM products p
         INNER JOIN (
             SELECT product_code, SUM(quantity) as totalQty 
-            FROM ticket_items 
+            FROM ticket_items ti
+            INNER JOIN tickets t ON ti.ticket_id = t.id
+            WHERE t.timestamp >= :since
             GROUP BY product_code
         ) v ON p.code = v.product_code
         ORDER BY v.totalQty DESC
         LIMIT 10
     """)
-    fun getTopSellingProducts(): Flow<List<Product>>
+    fun getTopSellingProducts(since: Long): Flow<List<Product>>
 
-    /**
-     * TAREA DE MANTENIMIENTO: Borra tickets más viejos que el timestamp proporcionado.
-     * Room se encargará de borrar los items asociados gracias al ForeignKey CASCADE.
-     */
     @Query("DELETE FROM tickets WHERE timestamp < :threshold")
     suspend fun deleteTicketsOlderThan(threshold: Long)
 
-    /**
-     * Cuenta cuántos tickets se han hecho hoy para generar el Folio.
-     */
     @Query("SELECT COUNT(*) FROM tickets WHERE timestamp >= :startOfDay")
     suspend fun countTicketsOfDay(startOfDay: Long): Int
 }
