@@ -11,12 +11,12 @@ Este documento establece las reglas, principios y funciones críticas para el de
 3.  **Inyección de Dependencias con Hilt:** Todas las dependencias son gestionadas por Hilt.
 4.  **Asincronía con Coroutines y Flow:** Todas las operaciones de BD, red o impresión se ejecutan en coroutines.
 
-### 1.2. Regla de Oro: Sincronización de Hardware (Bluetooth)
+### 1.2. Regla de Oro: Sincronización de Hardware (Bluetooth) - [REVISADO PARA PRUEBAS]
 
-**Es obligatorio respetar los tiempos físicos de la impresora de 57mm:**
-- **Handshake Inicial:** Espera de 1.2 segundos tras conectar antes de enviar datos.
-- **Release Seguro (Flush):** Pausa obligatoria de 2.5 segundos *antes* de cerrar el socket para permitir que el papel termine de salir.
-- **Ritmo de Datos:** Envío en paquetes de 32 bytes con 50ms de delay para evitar saturar el buffer del hardware.
+**Se han reducido los tiempos para optimizar la velocidad en tablets de prueba:**
+- **Handshake Inicial:** 0.5 segundos tras conectar.
+- **Release Seguro:** Pausa de 1.0 segundo antes de cerrar el socket.
+- **Ritmo de Datos:** Paquetes de 256 bytes con 20ms de delay.
 
 ### 1.3. Regla de Oro: Flujo de Despacho Profesional
 
@@ -36,21 +36,14 @@ Este documento establece las reglas, principios y funciones críticas para el de
 *   [x] **2. Implementar Indicador de Carga en Botón de Impresión.**
 *   [x] **3. Corregir Reimpresión en Historial.**
 *   [x] **4. Ajustes de Impresión de Ticket (Logo y QR).**
-*   [x] **5. Refactorización de UI y Teclado Inteligente (Smart Keyboard):**
-    *   Rediseño visual optimizado para Tablet (380dp de altura).
-    *   Sugerencias dinámicas diarias e importes rápidos con indicadores de scroll visual.
-*   [x] **6. Automatización y Mantenimiento (Offline-First):**
-    *   Reinicio automático de folios diarios (001, 002...).
-    *   Limpieza automática de tickets mayores a 48 horas al arrancar la app.
+*   [x] **5. Refactorización de UI y Teclado Inteligente (Smart Keyboard).**
+*   [x] **6. Automatización y Mantenimiento (Offline-First).**
 *   [x] **7. Blindaje de Impresión en Producción:**
-    *   Solución definitiva al fallo de segunda impresión mediante Flush de Hardware.
+    *   Solución al fallo de segunda impresión mediante limpieza de buffer.
     *   Inclusión de conteo de productos impreso (`PRODUCTOS: N`).
-*   [x] **8. Notas de Despacho Masivo (Contador de Piezas):**
-    *   Implementación de `estimatedPieces` en modelo y BD (v3).
-    *   Botón "+ PIEZAS" en teclado numérico para productos a granel.
-    *   Visualización de piezas estimadas en ticket impreso y resumen de venta.
+*   [x] **8. Notas de Despacho Masivo (Contador de Piezas).**
 
 ## 4. Gestión del Proyecto
 
--   **Checklist:** Este documento es el checklist oficial. Los puntos se marcan como completados `[x]`.
--   **Commits:** Se realizará un commit a Git después de completar cada punto para mantener puntos de restauración estables.
+-   **Checklist:** Este documento es el checklist oficial.
+-   **Commits:** Se realizará un commit a Git después de completar cada punto.

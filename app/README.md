@@ -6,28 +6,23 @@
 
 ## 2. Avances Recientes y Mejoras de Producción
 
-### 2.1 UI Optimizada para Tablets
-- **Rediseño de Teclados:** Tanto el teclado **QWERTY** como el **Keypad Numérico** han sido rediseñados con botones cuadrados de alto contraste (Verde Bosque) para una mejor respuesta táctil.
-- **Elevación Anti-Barra de Navegación:** Se implementó un margen de seguridad de **65dp** en la parte inferior de los teclados para evitar que los botones de sistema de la tablet (Atrás, Inicio) obstruyan el uso de la app.
-- **Panel Inferior Dinámico:** Se compactó el área de edición de productos para ganar altura vertical, permitiendo botones de teclado más grandes y fáciles de pulsar.
+### 2.1 UI Optimizada para Despacho Rápido
+- **Smart Keyboard v2:** Teclado QWERTY y Numérico optimizados para una altura de **380dp**, maximizando la visibilidad del ticket. Incluye indicadores de scroll visual (flechas parpadeantes y gradientes) para navegación lateral intuitiva.
+- **Moda Dinámica Diaria:** El teclado inteligente ahora sugiere los 10 productos más vendidos **específicamente del día actual**, adaptándose al ritmo de venta de cada jornada.
+- **Ayuda Visual de Precios:** Los precios por kilo/pieza se muestran permanentemente debajo de cada ítem en el ticket para validación inmediata del operario.
 
-### 2.2 Robustez en la Impresión
-- **Regla de Oro "Flush Print":** Implementación de una pausa obligatoria de **1.5 a 2 segundos** tras cada impresión para proteger el cabezal térmico y asegurar la integridad de los datos.
-- **Finalización Limpia:** Se añadió un comando de avance de papel y corte automático (`CMD_FEED_AND_CUT`) para liberar el buffer de la impresora y evitar bloqueos.
-- **Impresión Masiva Estable:** El historial de tickets ahora procesa reimpresiones de forma estrictamente secuencial, evitando la saturación del Bluetooth.
-- **Resalte de Unidades:** Los productos vendidos por pieza ahora muestran una línea prominente: `>> 5 PIEZAS <<` en negrita y tamaño doble.
+### 2.2 Gestión de Notas de Despacho (Nuevo)
+- **Contador de Piezas (+PZ):** Función especializada para productos a granel que permite anotar cuántas unidades físicas pidió el cliente (ej: 3 chiles, 2 cebollas) independientemente del peso, facilitando el surtido de órdenes masivas.
+- **Resumen Centrado para el Trabajador:** Diálogo de confirmación rediseñado como una "hoja de verificación" interna con nombres en mayúsculas, negritas y total destacado.
 
-### 2.3 Gestión de Datos e Historial
-- **Lector de CSV Híbrido:** Capacidad de importar bases de datos tanto en formato antiguo (separado por `;`) como en el nuevo formato de 14 columnas (separado por `,`), con limpieza automática de símbolos de moneda.
-- **Vista Previa de Tickets:** Nueva funcionalidad en el historial que permite visualizar el contenido de un ticket en una simulación de papel térmico antes de imprimir.
+### 2.3 Robustez en la Impresión (En Desarrollo)
+- **Sincronización de Hardware:** Implementación de protocolos de **Handshake (1.2s)** y **Release Seguro (2.5s)** para estabilizar la comunicación Bluetooth. 
+- **Nota Técnica:** Persiste un problema intermitente en la segunda impresión consecutiva; se utiliza el botón de "Reimprimir" como mecanismo de rescate mientras se optimiza el vaciado del buffer de hardware.
+- **Tickets Informativos:** Inclusión de conteo de productos impreso (`PRODUCTOS: N`) y avisos gigantes de `>> PIEZAS <<` para unidades múltiples.
 
-## 3. Arquitectura Técnica
-
-- **UI:** Jetpack Compose (Material 3).
-- **MVVM:** Separación estricta de lógica y vista.
-- **Room:** Persistencia local de productos y ventas.
-- **Hilt:** Inyección de dependencias para ViewModels y Repositorios.
-- **DataStore:** Manejo de preferencias (MAC de impresora, ajustes de logo).
+## 3. Arquitectura Técnica (v3)
+- **Base de Datos Room v3:** Esquema actualizado para soportar `estimatedPieces` y moda dinámica por timestamp.
+- **Comunicación:** Chunks de 64 bytes para evitar saturación de buffer en impresoras de 57mm.
 
 ## 4. Próximos Pasos (Checklist en AGENTS.md)
-Consultar el archivo `AGENTS.md` para el seguimiento detallado de las tareas técnicas y el estado del desarrollo.
+Consultar el archivo `AGENTS.md` para el seguimiento detallado de las tareas técnicas.

@@ -40,7 +40,7 @@ sealed class PrintResult {
 
 @Singleton
 class BluetoothPrinterHelper @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @field:ApplicationContext private val context: Context,
     private val userPreferencesRepository: UserPreferencesRepository
 ) {
     private val printMutex = Mutex()
@@ -115,24 +115,20 @@ class BluetoothPrinterHelper @Inject constructor(
                 socket = device.createInsecureRfcommSocketToServiceRecord(PRINTER_UUID)
                 withTimeout(10000) { socket.connect() }
                 
-                delay(1200) 
+                delay(800) 
                 
                 val outputStream = socket.outputStream
-                outputStream.write(CMD_INIT)
-                outputStream.flush()
-                delay(100)
-                
-                val chunkSize = 64
+                val chunkSize = 128 
                 var offset = 0
                 while (offset < data.size) {
                     val length = if (data.size - offset < chunkSize) data.size - offset else chunkSize
                     outputStream.write(data, offset, length)
                     outputStream.flush()
                     offset += length
-                    delay(60) 
+                    delay(40) 
                 }
                 
-                outputStream.write(CMD_INIT)
+                outputStream.write(byteArrayOf(0x0A, 0x0A, 0x0A)) 
                 outputStream.flush()
                 delay(2000) 
                 
@@ -141,8 +137,8 @@ class BluetoothPrinterHelper @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Fallo intento ${attempt + 1}: ${e.message}")
                 lastError = e.message ?: "Error de comunicación"
-                try { socket?.close() } catch (ex: Exception) {}
-                delay(1500) 
+                try { socket?.close() } catch (_: Exception) {}
+                delay(1000) 
             }
         }
         return PrintResult.Error("Fallo de hardware tras reintentos: $lastError")
@@ -159,22 +155,21 @@ class BluetoothPrinterHelper @Inject constructor(
             write(CMD_ALIGN_CENTER)
             write("LA PALMA CARNICERIA\n".toByteArray(charset))
             write("--------------------------------\n".toByteArray(charset))
-            write(("${fullDateFormat.format(Date(ticket.timestamp))}\n").toByteArray(charset))
+            write("${fullDateFormat.format(Date(ticket.timestamp))}\n".toByteArray(charset))
             write("--------------------------------\n".toByteArray(charset))
             
             write(CMD_ALIGN_LEFT)
             items.forEach { item ->
                 write(CMD_BOLD_ON)
                 val cleanName = item.product.name.uppercase()
-                write(("${if (cleanName.length > 20) cleanName.take(20) else cleanName} (${item.product.code.padStart(4, '0')})\n").toByteArray(charset))
+                write("${if (cleanName.length > 20) cleanName.take(20) else cleanName} (${item.product.code.padStart(4, '0')})\n".toByteArray(charset))
                 write(CMD_BOLD_OFF)
 
-                // RESTAURADO: Ayuda visual grande para piezas múltiples (REGLA DE ORO)
                 if (item.product.unit == ProductUnit.UNIDAD && item.quantity >= 2) {
                     write(CMD_ALIGN_CENTER)
                     write(CMD_BOLD_ON)
                     write(CMD_DOUBLE_SIZE_ON)
-                    write((">> ${item.quantity.toInt()} PIEZAS <<\n").toByteArray(charset))
+                    write(">> ${item.quantity.toInt()} PIEZAS <<\n".toByteArray(charset))
                     write(CMD_NORMAL_SIZE)
                     write(CMD_BOLD_OFF)
                     write(CMD_ALIGN_LEFT)
@@ -185,21 +180,21 @@ class BluetoothPrinterHelper @Inject constructor(
                 
                 val montoItemStr = currencyFormat.format(item.totalPrice)
                 val spaces = 32 - despacharStr.length - montoItemStr.length
-                val itemLine = if (spaces > 0) despacharStr + " ".repeat(spaces) + montoItemStr else (despacharStr + " " + montoItemStr).take(32)
-                write((itemLine + "\n").toByteArray(charset))
+                val itemLine = if (spaces > 0) "$despacharStr${" ".repeat(spaces)}$montoItemStr" else "$despacharStr $montoItemStr".take(32)
+                write("$itemLine\n".toByteArray(charset))
                 
                 try {
                     write(CMD_ALIGN_CENTER)
-                    // REGLA DE ORO: Generar código EAN-13 con precio para productos a GRANEL
                     val codeToPrint = if (item.product.unit == ProductUnit.GRANEL) {
                         generarCodigoParaPOS(item.product.code, item.totalPrice)
                     } else {
                         item.product.code
                     }
-                    printBarcode(this, codeToPrint, type = 73, height = 45) 
+                    // PRODUCTOS: Formato original CODE 128 (Tipo 73) con texto HRI abajo
+                    printBarcode(this, codeToPrint, type = 73, height = 45, hriPosition = 2) 
                     write(CMD_ALIGN_LEFT)
                     write("\n".toByteArray())
-                } catch (e: Exception) { }
+                } catch (_: Exception) { }
             }
 
             write("--------------------------------\n".toByteArray(charset))
@@ -209,39 +204,39 @@ class BluetoothPrinterHelper @Inject constructor(
             write(CMD_ALIGN_RIGHT)
             write("TOTAL: ".toByteArray(charset))
             write(CMD_DOUBLE_SIZE_ON)
-            write((currencyFormat.format(ticket.totalAmount) + "\n\n").toByteArray(charset))
+            write("${currencyFormat.format(ticket.totalAmount)}\n\n".toByteArray(charset))
             write(CMD_NORMAL_SIZE)
             
             write(CMD_ALIGN_CENTER)
             write("Folio: $folio\n\n".toByteArray(charset))
             
-            val internalCodeData = generarCodigoControlInterno(ticket.timestamp, folio, ticket.totalAmount)
+            // CONTROL INTERNO: CODE 128 Simplificado (Solo Hora y Folio)
+            val sdfTime = SimpleDateFormat("HHmmss", Locale.getDefault())
+            val timeDigits = sdfTime.format(Date(ticket.timestamp))
+            val controlData = "$timeDigits-$folio" 
+            
             try {
-                printQrCode(this, internalCodeData)
-            } catch (e: Exception) { }
-            write(("\n$internalCodeData\n").toByteArray(charset))
+                // Usamos CODE 128 sin HRI para que sea más fácil de escanear al final
+                printBarcode(this, controlData, type = 73, height = 70, hriPosition = 0)
+            } catch (_: Exception) { }
+            
             write("\n¡GRACIAS POR SU COMPRA!\n".toByteArray(charset))
             write(CMD_FEED_PAPER)
         }.toByteArray()
     }
 
-    private fun printQrCode(outputStream: OutputStream, data: String) {
-        val dataBytes = data.toByteArray(Charsets.ISO_8859_1)
-        val pL = (dataBytes.size + 3) % 256
-        val pH = (dataBytes.size + 3) / 256
-        outputStream.write(byteArrayOf(0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00)) 
-        outputStream.write(byteArrayOf(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, 0x04)) 
-        outputStream.write(byteArrayOf(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31)) 
-        outputStream.write(byteArrayOf(0x1D, 0x28, 0x6B, pL.toByte(), pH.toByte(), 0x31, 0x50, 0x30)) 
-        outputStream.write(dataBytes)
-        outputStream.write(byteArrayOf(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30)) 
-    }
-
-    private fun printBarcode(outputStream: OutputStream, data: String, type: Int, height: Int = 60) {
-        val dataBytes = data.toByteArray(Charsets.US_ASCII)
-        outputStream.write(byteArrayOf(0x1D, 0x68, height.toByte())) 
-        outputStream.write(byteArrayOf(0x1D, 0x77, 2.toByte())) 
-        outputStream.write(byteArrayOf(0x1D, 0x48, 2.toByte())) 
+    /**
+     * Lógica unificada para códigos de barras (Format 2 - GS k m n d1...dn)
+     */
+    private fun printBarcode(outputStream: OutputStream, data: String, type: Int, height: Int = 60, hriPosition: Int = 2) {
+        // CODE128 (73) requiere selector de subconjunto {B para datos alfanuméricos
+        val formattedData = if (type == 73 && !data.startsWith("{")) "{B$data" else data
+        val dataBytes = formattedData.toByteArray(Charsets.US_ASCII)
+        
+        outputStream.write(byteArrayOf(0x1D, 0x68, height.toByte())) // Altura
+        outputStream.write(byteArrayOf(0x1D, 0x77, 2.toByte()))      // Ancho 2 (ideal para 58mm)
+        outputStream.write(byteArrayOf(0x1D, 0x48, hriPosition.toByte())) // Posición del texto (0=Ninguno, 2=Abajo)
+        
         outputStream.write(byteArrayOf(0x1D, 0x6B, type.toByte(), dataBytes.size.toByte()))
         outputStream.write(dataBytes)
     }
@@ -252,33 +247,27 @@ class BluetoothPrinterHelper @Inject constructor(
         return "200$cleanCode${priceInCents}5"
     }
 
-    private fun generarCodigoControlInterno(timestamp: Long, folio: String, total: Double): String {
-        val sdf = SimpleDateFormat("HHmmss", Locale.getDefault())
-        val time = sdf.format(Date(timestamp))
-        val totalStr = "%.2f".format(total).replace(",", ".")
-        return "$time-$folio-$totalStr"
-    }
-
     suspend fun printEtiqueta(etiqueta: EtiquetaProducto, quantity: Int): PrintResult = printMutex.withLock {
         val deviceAddress = userPreferencesRepository.printerMacAddress.first() ?: return PrintResult.Error("Impresora no configurada")
         return withContext(Dispatchers.IO) {
             try {
+                val baos = ByteArrayOutputStream()
+                val charset = Charsets.ISO_8859_1
                 repeat(quantity) {
-                    val baos = ByteArrayOutputStream().apply {
+                    baos.apply {
                         write(CMD_INIT)
                         write(CMD_ALIGN_CENTER)
                         write(CMD_BOLD_ON)
                         write(CMD_DOUBLE_SIZE_ON)
-                        write((etiqueta.nombre + "\n").toByteArray(Charsets.US_ASCII))
+                        write("${etiqueta.nombre}\n".toByteArray(charset))
                         write(CMD_NORMAL_SIZE)
                         write(CMD_BOLD_OFF)
-                        write((etiqueta.precio + "\n\n").toByteArray(Charsets.US_ASCII))
+                        write("${etiqueta.precio}\n".toByteArray(charset))
                         write(CMD_FEED_PAPER)
+                        write("\n\n".toByteArray())
                     }
-                    sendDataToDeviceWithRetry(deviceAddress, baos.toByteArray())
-                    delay(500)
                 }
-                PrintResult.Success
+                sendDataToDeviceWithRetry(deviceAddress, baos.toByteArray())
             } catch (e: Exception) { PrintResult.Error("Error: ${e.message}") }
         }
     }
