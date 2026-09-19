@@ -14,7 +14,6 @@ import com.example.carniceriaapp20.util.BluetoothPrinterHelper
 import com.example.carniceriaapp20.util.PrintResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -47,22 +46,6 @@ class TpvViewModel @Inject constructor(
     private val _fastProducts = productRepository.getTopSellingProducts()
         .onStart { emit(emptyList()) }
         .catch { emit(emptyList()) }
-
-    init {
-        viewModelScope.launch {
-            delay(5000) 
-            performMaintenance()
-        }
-    }
-
-    private fun performMaintenance() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val twoDaysAgo = System.currentTimeMillis() - (2 * 24 * 60 * 60 * 1000L)
-                ticketRepository.deleteTicketsOlderThan(twoDaysAgo)
-            } catch (e: Exception) { }
-        }
-    }
 
     private suspend fun generateDailyFolio(): Int {
         return try {
@@ -129,10 +112,11 @@ class TpvViewModel @Inject constructor(
                         ticketId = 0,
                         productCode = it.product.code,
                         productName = it.product.name,
+                        productDepartment = it.product.department, // MODIFICADO: Guardar departamento para reportes
                         quantity = it.quantity,
                         unitPrice = it.customPrice ?: it.product.price,
                         totalPrice = it.totalPrice,
-                        estimatedPieces = it.estimatedPieces // NUEVO: Guardar piezas estimadas
+                        estimatedPieces = it.estimatedPieces
                     )
                 })
 
@@ -151,7 +135,6 @@ class TpvViewModel @Inject constructor(
         }
     }
 
-    // NUEVO: Función para aplicar piezas estimadas a un producto a granel
     fun applyEstimatedPieces() {
         val inputAsInt = _keypadInput.value.toIntOrNull() ?: return
         val selectedItem = _selectedCartItem.value ?: return

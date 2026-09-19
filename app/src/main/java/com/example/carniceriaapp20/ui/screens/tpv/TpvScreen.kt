@@ -51,6 +51,7 @@ import com.example.carniceriaapp20.ui.navigation.Routes
 import com.example.carniceriaapp20.util.PrintResult
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import java.util.Locale
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -98,12 +99,37 @@ fun TpvScreen(
                     Box {
                         IconButton(onClick = { menuExpanded = true }) { Icon(Icons.Default.MoreVert, contentDescription = null) }
                         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                            DropdownMenuItem(text = { Text("Gestionar Productos") }, onClick = { navController.navigate(Routes.PRODUCT_LIST); menuExpanded = false }, leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) })
+                            DropdownMenuItem(
+                                text = { Text("Gestionar Productos") }, 
+                                onClick = { navController.navigate(Routes.PRODUCT_LIST); menuExpanded = false }, 
+                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                            )
                             HorizontalDivider()
-                            DropdownMenuItem(text = { Text("Historial de Tickets") }, onClick = { navController.navigate(Routes.HISTORY); menuExpanded = false }, leadingIcon = { Icon(Icons.Default.History, contentDescription = null) })
-                            DropdownMenuItem(text = { Text("Generador de Etiquetas") }, onClick = { navController.navigate(Routes.LABEL_GENERATOR); menuExpanded = false }, leadingIcon = { Icon(Icons.Default.QrCodeScanner, contentDescription = null) })
-                            DropdownMenuItem(text = { Text("Actualizar Base de Datos") }, onClick = { navController.navigate(Routes.UPDATE_FROM_CSV); menuExpanded = false }, leadingIcon = { Icon(Icons.Default.SystemUpdate, contentDescription = null) })
-                             DropdownMenuItem(text = { Text("Configurar Impresora") }, onClick = { viewModel.onSettingsClick(); menuExpanded = false }, leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) })
+                            DropdownMenuItem(
+                                text = { Text("Historial de Tickets") }, 
+                                onClick = { navController.navigate(Routes.HISTORY); menuExpanded = false }, 
+                                leadingIcon = { Icon(Icons.Default.History, contentDescription = null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Reportes de Venta") }, // NUEVO: Acceso a reportes
+                                onClick = { navController.navigate(Routes.REPORTS); menuExpanded = false }, 
+                                leadingIcon = { Icon(Icons.Default.BarChart, contentDescription = null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Generador de Etiquetas") }, 
+                                onClick = { navController.navigate(Routes.LABEL_GENERATOR); menuExpanded = false }, 
+                                leadingIcon = { Icon(Icons.Default.QrCodeScanner, contentDescription = null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Actualizar Base de Datos") }, 
+                                onClick = { navController.navigate(Routes.UPDATE_FROM_CSV); menuExpanded = false }, 
+                                leadingIcon = { Icon(Icons.Default.SystemUpdate, contentDescription = null) }
+                            )
+                             DropdownMenuItem(
+                                 text = { Text("Configurar Impresora") }, 
+                                 onClick = { viewModel.onSettingsClick(); menuExpanded = false }, 
+                                 leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) }
+                             )
                         }
                     }
                 }
@@ -175,7 +201,7 @@ fun TicketManagementPanel(modifier: Modifier = Modifier, uiState: TpvUiState, is
     
     Column(modifier = modifier) {
         ScrollableTabRow(selectedTabIndex = uiState.activeTicketIndex, containerColor = Color.Transparent, divider = {}, edgePadding = 8.dp) {
-            uiState.tickets.forEachIndexed { index, ticket -> Tab(selected = uiState.activeTicketIndex == index, onClick = { onSetActiveTicket(index) }, text = { Row(verticalAlignment = Alignment.CenterVertically) { Text("T${index + 1}", style = if(isTablet) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall, fontWeight = if (uiState.activeTicketIndex == index) FontWeight.Bold else FontWeight.Normal) ; if (uiState.tickets.size > 1) { Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(if(isTablet) 12.dp else 10.dp).padding(start = 4.dp).clickable { onCloseTicket(index) }) } } }) }
+            uiState.tickets.forEachIndexed { index, ticket -> Tab(selected = uiState.activeTicketIndex == index, onClick = { onSetActiveTicket(index) }, text = { Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) { Text("T${index + 1}", style = if(isTablet) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall, fontWeight = if (uiState.activeTicketIndex == index) FontWeight.Bold else FontWeight.Normal) ; if (uiState.tickets.size > 1) { Spacer(modifier = Modifier.width(4.dp)) ; IconButton(onClick = { onCloseTicket(index) }, modifier = Modifier.size(if(isTablet) 32.dp else 28.dp)) { Icon(Icons.Default.Close, contentDescription = "Cerrar ticket ${index + 1}", modifier = Modifier.size(if(isTablet) 16.dp else 14.dp)) } } } }) }
             Tab(selected = false, onClick = onAddTicket, text = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(if(isTablet) 18.dp else 14.dp)) })
         }
         
@@ -255,7 +281,7 @@ fun CartItemRow(item: CartItem, isSelected: Boolean, isTablet: Boolean, onClick:
             Text(item.product.name, style = if(isTablet) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val unitLabel = if(item.product.unit == ProductUnit.GRANEL) "kg" else "pz"
-                val quantityDisplay = if (item.product.unit == ProductUnit.GRANEL) (if (item.customPrice != null) "Manual" else "${String.format("%.3f", item.quantity)} kg") else "${item.quantity.toInt()} pz"
+                val quantityDisplay = if (item.product.unit == ProductUnit.GRANEL) "${"%.3f".format(Locale.forLanguageTag("es-MX"), item.quantity)} kg" else "${item.quantity.toInt()} pz"
                 Text(quantityDisplay, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 
                 // MEJORA: Mostrar piezas estimadas si existen
@@ -404,7 +430,7 @@ fun ConfirmSaleDialog(ticket: TicketState, isPrinting: Boolean, onDismiss: () ->
                     ) {
                         items(ticket.items) {
                             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                val qtyText = if(it.product.unit == ProductUnit.GRANEL) String.format("%.3f kg", it.quantity) else "${it.quantity.toInt()} pz"
+                                val qtyText = if(it.product.unit == ProductUnit.GRANEL) "%.3f kg".format(Locale.forLanguageTag("es-MX"), it.quantity) else "${it.quantity.toInt()} pz"
                                 Text(it.product.name.uppercase(), fontWeight = FontWeight.Black, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
                                 
                                 // MOSTRAR PIEZAS ESTIMADAS EN RESUMEN

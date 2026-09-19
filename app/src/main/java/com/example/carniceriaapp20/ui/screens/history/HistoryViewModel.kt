@@ -13,12 +13,10 @@ import com.example.carniceriaapp20.util.BluetoothPrinterHelper
 import com.example.carniceriaapp20.util.PrintResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
-import kotlin.math.abs
 
 data class HistoryUiState(
     val tickets: List<TicketWithItems> = emptyList(),
@@ -35,7 +33,7 @@ class HistoryViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _printResult = MutableStateFlow<PrintResult?>(null)
-    private val _ticketsWithItems = ticketRepository.getAllTicketsWithItems()
+    private val _ticketsWithItems: Flow<List<TicketWithItems>> = ticketRepository.getAllTicketsWithItems()
     private val _selectedTicketIds = MutableStateFlow<Set<Long>>(emptySet())
     private val _isPrinting = MutableStateFlow(false)
 
@@ -44,7 +42,7 @@ class HistoryViewModel @Inject constructor(
         _printResult, 
         _selectedTicketIds,
         _isPrinting
-    ) { tickets, printResult, selectedIds, printing ->
+    ) { tickets: List<TicketWithItems>, printResult: PrintResult?, selectedIds: Set<Long>, printing: Boolean ->
         HistoryUiState(
             tickets = tickets,
             printResult = printResult,
@@ -75,9 +73,9 @@ class HistoryViewModel @Inject constructor(
 
     fun printSelectedTicketsForAudit() {
         if (_isPrinting.value) return
-        val allTickets = uiState.value.tickets
-        val selectedTickets = allTickets.filter { 
-            _selectedTicketIds.value.contains(it.ticket.id)
+        val allTickets: List<TicketWithItems> = uiState.value.tickets
+        val selectedTickets: List<TicketWithItems> = allTickets.filter { ticketWithItems: TicketWithItems -> 
+            _selectedTicketIds.value.contains(ticketWithItems.ticket.id)
         }.sortedBy { it.ticket.timestamp } 
 
         if (selectedTickets.isEmpty()) return
@@ -85,8 +83,9 @@ class HistoryViewModel @Inject constructor(
         viewModelScope.launch {
             _isPrinting.value = true
             
-            val batchData = selectedTickets.map { ticketWithItems ->
-                val cartItems = ticketWithItems.items.map { ticketItem ->
+            // Especificamos el tipo de batchData para ayudar al compilador
+            val batchData: List<Pair<Ticket, List<CartItem>>> = selectedTickets.map { ticketWithItems: TicketWithItems ->
+                val cartItems: List<CartItem> = ticketWithItems.items.map { ticketItem: TicketItem ->
                     val isProbablyGranel = ticketItem.quantity % 1.0 != 0.0 || ticketItem.unitPrice == ticketItem.totalPrice
                     CartItem(
                         product = Product(
@@ -103,7 +102,8 @@ class HistoryViewModel @Inject constructor(
                 Pair(ticketWithItems.ticket, cartItems)
             }
 
-            val finalResult = withContext(Dispatchers.IO) {
+            // Especificamos el tipo genérico <PrintResult> en withContext
+            val finalResult: PrintResult = withContext<PrintResult>(Dispatchers.IO) {
                 printerHelper.printTicketsBatch(batchData)
             }
 

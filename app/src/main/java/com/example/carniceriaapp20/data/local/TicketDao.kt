@@ -3,6 +3,28 @@ package com.example.carniceriaapp20.data.local
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
+data class DepartmentSalesReport(
+    val department: String,
+    val totalAmount: Double,
+    val totalPieces: Double,
+    val totalKilos: Double
+)
+
+data class ProductSalesReport(
+    val productName: String,
+    val productCode: String?,
+    val totalAmount: Double,
+    val totalQuantity: Double,
+    val department: String,
+    val unit: ProductUnit? = null
+) {
+    // ticket_items no guarda la unidad de venta: esta se obtiene por JOIN contra el catálogo
+    // actual y viene null cuando el producto ya no existe (ej. tras reimportar el CSV). En ese
+    // caso se infiere igual que en el resto de la app: cantidad fraccionaria = GRANEL (kg).
+    val effectiveUnit: ProductUnit
+        get() = unit ?: (if (totalQuantity % 1.0 != 0.0) ProductUnit.GRANEL else ProductUnit.UNIDAD)
+}
+
 @Dao
 interface TicketDao {
 
@@ -23,7 +45,6 @@ interface TicketDao {
     @Query("SELECT * FROM tickets ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLastTicket(): Ticket?
 
-    // MODIFICADO: Ahora solo cuenta las ventas desde el inicio del día para la moda dinámica
     @Query("""
         SELECT p.* FROM products p
         INNER JOIN (
@@ -38,9 +59,23 @@ interface TicketDao {
     """)
     fun getTopSellingProducts(since: Long): Flow<List<Product>>
 
-    @Query("DELETE FROM tickets WHERE timestamp < :threshold")
-    suspend fun deleteTicketsOlderThan(threshold: Long)
-
     @Query("SELECT COUNT(*) FROM tickets WHERE timestamp >= :startOfDay")
     suspend fun countTicketsOfDay(startOfDay: Long): Int
+
+    @Query("""
+        SELECT 
+            ti.product_name as productName, 
+            ti.product_code as productCode, 
+            SUM(ti.total_price) as totalAmount, 
+            SUM(ti.quantity) as totalQuantity,
+            ti.product_department as department,
+            p.unit as unit
+        FROM ticket_items ti
+        INNER JOIN tickets t ON ti.ticket_id = t.id
+        LEFT JOIN products p ON ti.product_code = p.code
+        WHERE t.timestamp >= :startTime AND t.timestamp <= :endTime
+        GROUP BY ti.product_name, ti.product_code, ti.product_department, p.unit
+        ORDER BY totalAmount DESC
+    """)
+    suspend fun getSalesReportByProduct(startTime: Long, endTime: Long): List<ProductSalesReport>
 }

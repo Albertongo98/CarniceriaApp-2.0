@@ -112,7 +112,7 @@ fun HistoryScreen(
         ) {
             if (uiState.tickets.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No hay ventas registradas en las últimas 48h", color = MaterialTheme.colorScheme.outline)
+                    Text("No hay ventas registradas", color = MaterialTheme.colorScheme.outline)
                 }
             } else {
                 LazyColumn(

@@ -24,6 +24,10 @@ class ProductRepositoryImpl @Inject constructor(
         productDao.insertProduct(product)
     }
 
+    override suspend fun insertProducts(products: List<Product>) {
+        products.forEach { productDao.insertProduct(it) }
+    }
+
     override suspend fun updateProduct(product: Product) {
         productDao.updateProduct(product)
     }
@@ -37,7 +41,6 @@ class ProductRepositoryImpl @Inject constructor(
     }
 
     override fun getTopSellingProducts(): Flow<List<Product>> {
-        // Calculamos el inicio del día actual (00:00:00) para la moda dinámica
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)

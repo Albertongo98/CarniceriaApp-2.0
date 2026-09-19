@@ -1,5 +1,6 @@
 package com.example.carniceriaapp20.data.repository
 
+import com.example.carniceriaapp20.data.local.ProductSalesReport
 import com.example.carniceriaapp20.data.local.Ticket
 import com.example.carniceriaapp20.data.local.TicketDao
 import com.example.carniceriaapp20.data.local.TicketItem
@@ -30,11 +31,11 @@ class TicketRepositoryImpl @Inject constructor(
         return ticketDao.getTicketWithItems(ticketId)
     }
 
-    override suspend fun deleteTicketsOlderThan(threshold: Long) {
-        ticketDao.deleteTicketsOlderThan(threshold)
-    }
-
     override suspend fun countTicketsOfDay(startOfDay: Long): Int {
         return ticketDao.countTicketsOfDay(startOfDay)
+    }
+
+    override suspend fun getProductSalesReport(startTime: Long, endTime: Long): List<ProductSalesReport> {
+        return ticketDao.getSalesReportByProduct(startTime, endTime)
     }
 }

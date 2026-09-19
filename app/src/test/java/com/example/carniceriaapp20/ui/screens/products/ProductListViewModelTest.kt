@@ -5,6 +5,7 @@ import com.example.carniceriaapp20.data.local.ProductUnit
 import com.example.carniceriaapp20.data.repository.ProductRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -39,9 +40,9 @@ class ProductListViewModelTest {
         viewModel = ProductListViewModel(mockRepository)
 
         // Then
-        // With UnconfinedTestDispatcher, the coroutine for stateIn is launched and executed immediately.
-        // No need to advance the scheduler.
-        assertEquals(testProducts, viewModel.products.value)
+        // products usa SharingStarted.WhileSubscribed: el StateFlow no arranca a coleccionar el
+        // upstream hasta que alguien lo suscribe. Leer .value directo se queda con el valor inicial.
+        assertEquals(testProducts, viewModel.products.first())
     }
 
     @Test

@@ -6,6 +6,7 @@ import com.example.carniceriaapp20.data.local.ProductUnit
 import com.example.carniceriaapp20.data.repository.ProductRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -28,6 +29,8 @@ class AddEditProductViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        // El ViewModel deriva "departments" de getAllProducts() en su inicializador.
+        whenever(mockRepository.getAllProducts()).thenReturn(flowOf(emptyList()))
     }
 
     @Test

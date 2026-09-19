@@ -7,7 +7,7 @@ Esta versión 2.0 ha sido reconstruida desde cero utilizando tecnologías modern
 ## ✨ Características Principales
 
 ### 🖥️ Estación de Despacho (TPV)
-*   **Multiticket Simultáneo:** Permite gestionar hasta 5 tickets abiertos al mismo tiempo para no detener el flujo de atención.
+*   **Multiticket Simultáneo:** Permite gestionar varios tickets abiertos al mismo tiempo para no detener el flujo de atención.
 *   **Gestión de Productos Inteligente:** Soporte para productos por **Unidad** y a **Granel (Peso)**.
 *   **Teclado Inteligente (Smart Keyboard):** Interfaz híbrida con teclado numérico para cantidades/precios y QWERTY para búsqueda rápida de productos.
 *   **Notas de Despacho Masivo:** Función exclusiva para anotar piezas estimadas en ventas por peso, facilitando el conteo físico en el área de despacho.
@@ -26,7 +26,8 @@ Esta versión 2.0 ha sido reconstruida desde cero utilizando tecnologías modern
 ### 🛠️ Mantenimiento y Rendimiento
 *   **Offline-First:** Funciona al 100% sin conexión a internet.
 *   **Gestión de Folios Diarios:** Reinicio automático del contador de folios cada día.
-*   **Auto-Limpieza:** Sistema de depuración automática de tickets antiguos (48h) para mantener el almacenamiento ligero.
+*   **Reportes de Ventas:** Corte por fecha con resumen por departamento (piezas y kilos por separado), impresión de corte de caja y exportación a HTML.
+*   **Historial Completo:** Los tickets se conservan; las migraciones de base de datos preservan productos y ventas entre versiones.
 
 ## 🚀 Stack Tecnológico
 
@@ -47,12 +48,9 @@ Esta versión 2.0 ha sido reconstruida desde cero utilizando tecnologías modern
     *   Vincular la impresora en los ajustes de Bluetooth del dispositivo.
     *   Abrir la app y seleccionar la impresora desde el menú de ajustes de la TPV.
 
-## 🛠️ Reglas de Oro del Proyecto (Internal Docs)
+## 🛠️ Reglas de Oro del Proyecto
 
-El desarrollo sigue directivas estrictas de sincronización de hardware:
-*   **Handshake:** 0.8s tras conexión.
-*   **Release:** 2.0s antes de cierre de socket.
-*   **Ritmo:** Chunks de 128 bytes para máxima compatibilidad con microprocesadores chinos genéricos.
+Las reglas críticas de desarrollo (base de datos, impresión Bluetooth, formatos, arquitectura) y la lista completa de funcionalidades están en [`CLAUDE.md`](CLAUDE.md).
 
 ---
 Desarrollado con ❤️ para optimizar el despacho en carnicerías.

@@ -35,6 +35,9 @@ data class TicketItem(
     @ColumnInfo(name = "product_name")
     val productName: String,
 
+    @ColumnInfo(name = "product_department") // NUEVO: Para reportes por departamento
+    val productDepartment: String,
+
     @ColumnInfo(name = "quantity")
     val quantity: Double,
 
@@ -44,6 +47,6 @@ data class TicketItem(
     @ColumnInfo(name = "total_price")
     val totalPrice: Double,
 
-    @ColumnInfo(name = "estimated_pieces") // NUEVO: Para notas de despacho
+    @ColumnInfo(name = "estimated_pieces")
     val estimatedPieces: Int? = null
 )

@@ -14,6 +14,7 @@ import com.example.carniceriaapp20.ui.screens.settings.SettingsScreen
 import com.example.carniceriaapp20.ui.screens.tpv.TpvScreen
 import com.example.carniceriaapp20.ui.screens.update.UpdateFromCsvScreen
 import com.example.carniceriaapp20.ui.screens.splash.SplashScreen
+import com.example.carniceriaapp20.ui.screens.reports.ReportsScreen
 
 object Routes {
     const val SPLASH = "splash"
@@ -25,6 +26,7 @@ object Routes {
     const val HISTORY = "history"
     const val UPDATE_FROM_CSV = "update_from_csv"
     const val LABEL_GENERATOR = "label_generator"
+    const val REPORTS = "reports"
 }
 
 @Composable
@@ -70,7 +72,7 @@ fun AppNavigation() {
         }
         composable(Routes.HISTORY) {
             HistoryScreen(
-                onNavigateBack = { navController.popBackStack() } // CORREGIDO: Acción para volver
+                onNavigateBack = { navController.popBackStack() }
             )
         }
         composable(Routes.UPDATE_FROM_CSV) {
@@ -78,6 +80,11 @@ fun AppNavigation() {
         }
         composable(Routes.LABEL_GENERATOR) {
             LabelGeneratorScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable(Routes.REPORTS) {
+            ReportsScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

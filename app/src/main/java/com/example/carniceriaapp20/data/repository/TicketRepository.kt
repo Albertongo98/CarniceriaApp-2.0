@@ -1,5 +1,6 @@
 package com.example.carniceriaapp20.data.repository
 
+import com.example.carniceriaapp20.data.local.ProductSalesReport
 import com.example.carniceriaapp20.data.local.Ticket
 import com.example.carniceriaapp20.data.local.TicketItem
 import com.example.carniceriaapp20.data.local.TicketWithItems
@@ -15,7 +16,7 @@ interface TicketRepository {
 
     fun getTicketWithItems(ticketId: Long): Flow<TicketWithItems?>
 
-    suspend fun deleteTicketsOlderThan(threshold: Long)
-
     suspend fun countTicketsOfDay(startOfDay: Long): Int
+
+    suspend fun getProductSalesReport(startTime: Long, endTime: Long): List<ProductSalesReport>
 }
