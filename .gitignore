@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Catalogo real del negocio (contiene precios de costo): no subir al repo
+app/productos.csv
