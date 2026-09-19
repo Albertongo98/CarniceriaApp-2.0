@@ -38,4 +38,8 @@ class TicketRepositoryImpl @Inject constructor(
     override suspend fun getProductSalesReport(startTime: Long, endTime: Long): List<ProductSalesReport> {
         return ticketDao.getSalesReportByProduct(startTime, endTime)
     }
+
+    override suspend fun getTicketsBetween(startTime: Long, endTime: Long): List<Ticket> {
+        return ticketDao.getTicketsBetween(startTime, endTime)
+    }
 }

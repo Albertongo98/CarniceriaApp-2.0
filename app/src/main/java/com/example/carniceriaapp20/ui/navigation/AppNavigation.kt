@@ -10,7 +10,6 @@ import com.example.carniceriaapp20.ui.screens.generador.LabelGeneratorScreen
 import com.example.carniceriaapp20.ui.screens.history.HistoryScreen
 import com.example.carniceriaapp20.ui.screens.products.AddEditProductScreen
 import com.example.carniceriaapp20.ui.screens.products.ProductListScreen
-import com.example.carniceriaapp20.ui.screens.settings.SettingsScreen
 import com.example.carniceriaapp20.ui.screens.tpv.TpvScreen
 import com.example.carniceriaapp20.ui.screens.update.UpdateFromCsvScreen
 import com.example.carniceriaapp20.ui.screens.splash.SplashScreen
@@ -22,7 +21,6 @@ object Routes {
     const val PRODUCT_LIST = "product_list"
     const val ADD_EDIT_PRODUCT = "add_edit_product"
     const val PRODUCT_CODE_ARG = "productCode"
-    const val SETTINGS = "settings"
     const val HISTORY = "history"
     const val UPDATE_FROM_CSV = "update_from_csv"
     const val LABEL_GENERATOR = "label_generator"
@@ -66,9 +64,6 @@ fun AppNavigation() {
                     navController.popBackStack()
                 }
             )
-        }
-        composable(Routes.SETTINGS) {
-            SettingsScreen(navController = navController)
         }
         composable(Routes.HISTORY) {
             HistoryScreen(

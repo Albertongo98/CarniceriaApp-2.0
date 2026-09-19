@@ -3,6 +3,12 @@ package com.example.carniceriaapp20.data.local
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
+data class DaySalesReport(
+    val dayStart: Long,
+    val tickets: Int,
+    val total: Double
+)
+
 data class DepartmentSalesReport(
     val department: String,
     val totalAmount: Double,
@@ -73,9 +79,12 @@ interface TicketDao {
         FROM ticket_items ti
         INNER JOIN tickets t ON ti.ticket_id = t.id
         LEFT JOIN products p ON ti.product_code = p.code
-        WHERE t.timestamp >= :startTime AND t.timestamp <= :endTime
+        WHERE t.timestamp >= :startTime AND t.timestamp < :endTime
         GROUP BY ti.product_name, ti.product_code, ti.product_department, p.unit
         ORDER BY totalAmount DESC
     """)
     suspend fun getSalesReportByProduct(startTime: Long, endTime: Long): List<ProductSalesReport>
+
+    @Query("SELECT * FROM tickets WHERE timestamp >= :startTime AND timestamp < :endTime ORDER BY timestamp")
+    suspend fun getTicketsBetween(startTime: Long, endTime: Long): List<Ticket>
 }

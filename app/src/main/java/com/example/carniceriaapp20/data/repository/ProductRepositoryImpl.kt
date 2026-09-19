@@ -1,5 +1,7 @@
 package com.example.carniceriaapp20.data.repository
 
+import androidx.room.withTransaction
+import com.example.carniceriaapp20.data.local.CarniceriaDatabase
 import com.example.carniceriaapp20.data.local.Product
 import com.example.carniceriaapp20.data.local.ProductDao
 import com.example.carniceriaapp20.data.local.TicketDao
@@ -8,6 +10,7 @@ import java.util.Calendar
 import javax.inject.Inject
 
 class ProductRepositoryImpl @Inject constructor(
+    private val database: CarniceriaDatabase,
     private val productDao: ProductDao,
     private val ticketDao: TicketDao
 ) : ProductRepository {
@@ -24,8 +27,17 @@ class ProductRepositoryImpl @Inject constructor(
         productDao.insertProduct(product)
     }
 
-    override suspend fun insertProducts(products: List<Product>) {
-        products.forEach { productDao.insertProduct(it) }
+    override suspend fun replaceAllProducts(products: List<Product>) {
+        database.withTransaction {
+            // No se usa "borrar todo + insertar": con las claves foráneas activas, borrar un producto
+            // deja en NULL el product_code de sus ventas históricas. Solo se borran los que ya no vienen.
+            val newCodes = products.mapTo(HashSet()) { it.code }
+            productDao.getAllCodes()
+                .filter { it !in newCodes }
+                .chunked(500) // límite de variables de SQLite (999 en Android antiguos)
+                .forEach { productDao.deleteByCodes(it) }
+            productDao.upsertProducts(products)
+        }
     }
 
     override suspend fun updateProduct(product: Product) {
@@ -34,10 +46,6 @@ class ProductRepositoryImpl @Inject constructor(
 
     override suspend fun deleteProduct(product: Product) {
         productDao.deleteProduct(product)
-    }
-
-    override suspend fun deleteAllProducts() {
-        productDao.deleteAllProducts()
     }
 
     override fun getTopSellingProducts(): Flow<List<Product>> {

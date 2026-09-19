@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.ActivityCompat
+import com.example.carniceriaapp20.data.local.DaySalesReport
 import com.example.carniceriaapp20.data.local.DepartmentSalesReport
 import com.example.carniceriaapp20.data.local.ProductSalesReport
 import com.example.carniceriaapp20.data.local.ProductUnit
@@ -42,7 +43,7 @@ sealed class PrintResult {
 
 @Singleton
 class BluetoothPrinterHelper @Inject constructor(
-    @field:ApplicationContext private val context: Context,
+    @ApplicationContext private val context: Context,
     private val userPreferencesRepository: UserPreferencesRepository
 ) {
     private val printMutex = Mutex()
@@ -82,25 +83,29 @@ class BluetoothPrinterHelper @Inject constructor(
     }
 
     suspend fun printSalesReport(
-        date: String,
-        totalDay: Double,
+        period: String,
+        total: Double,
+        ticketCount: Int,
         deptSales: List<DepartmentSalesReport>,
-        prodSales: List<ProductSalesReport>
+        prodSales: List<ProductSalesReport>,
+        dailySales: List<DaySalesReport>
     ): PrintResult = printMutex.withLock {
         val deviceAddress = userPreferencesRepository.printerMacAddress.first() ?: return PrintResult.Error("Impresora no configurada")
         return withContext(Dispatchers.IO) {
             try {
-                val data = buildSalesReportData(date, totalDay, deptSales, prodSales)
+                val data = buildSalesReportData(period, total, ticketCount, deptSales, prodSales, dailySales)
                 sendDataToDeviceWithRetry(deviceAddress, data)
             } catch (e: Exception) { PrintResult.Error("Error: ${e.message}") }
         }
     }
 
     private fun buildSalesReportData(
-        date: String,
-        totalDay: Double,
+        period: String,
+        total: Double,
+        ticketCount: Int,
         deptSales: List<DepartmentSalesReport>,
-        prodSales: List<ProductSalesReport>
+        prodSales: List<ProductSalesReport>,
+        dailySales: List<DaySalesReport>
     ): ByteArray {
         val charset = Charsets.ISO_8859_1
         val localeMexico = Locale.forLanguageTag("es-MX")
@@ -114,7 +119,9 @@ class BluetoothPrinterHelper @Inject constructor(
             write(CMD_NORMAL_SIZE)
             write("LA PALMA CARNICERIA\n".toByteArray(charset))
             write(CMD_BOLD_OFF)
-            write("Fecha: $date\n".toByteArray(charset))
+            write("$period\n".toByteArray(charset))
+            write("Tickets: $ticketCount\n".toByteArray(charset))
+            if (ticketCount > 0) write("Ticket prom.: ${currencyFormat.format(total / ticketCount)}\n".toByteArray(charset))
             write("--------------------------------\n".toByteArray(charset))
 
             write(CMD_ALIGN_LEFT)
@@ -135,11 +142,25 @@ class BluetoothPrinterHelper @Inject constructor(
                 write("--------------------------------\n".toByteArray(charset))
             }
 
+            if (dailySales.size > 1) {
+                val dayFormat = SimpleDateFormat("dd/MM", localeMexico)
+                write(CMD_BOLD_ON)
+                write("VENTAS POR DIA\n".toByteArray(charset))
+                write(CMD_BOLD_OFF)
+                dailySales.forEach { day ->
+                    val left = "${dayFormat.format(Date(day.dayStart))} ${day.tickets}tk"
+                    val amount = currencyFormat.format(day.total)
+                    val spaces = 32 - left.length - amount.length
+                    write("${if (spaces > 0) left + " ".repeat(spaces) + amount else "$left $amount"}\n".toByteArray(charset))
+                }
+                write("--------------------------------\n".toByteArray(charset))
+            }
+
             write(CMD_ALIGN_RIGHT)
             write(CMD_BOLD_ON)
             write("TOTAL VENTA: ".toByteArray(charset))
             write(CMD_DOUBLE_SIZE_ON)
-            write("${currencyFormat.format(totalDay)}\n".toByteArray(charset))
+            write("${currencyFormat.format(total)}\n".toByteArray(charset))
             write(CMD_NORMAL_SIZE)
             write(CMD_BOLD_OFF)
             
@@ -198,7 +219,8 @@ class BluetoothPrinterHelper @Inject constructor(
                 return PrintResult.Success
             } catch (e: Exception) {
                 lastError = e.message ?: "Error de comunicación"
-                try { socket?.close() } catch (_: Exception) {}
+                Log.e(TAG, "Fallo de impresión, intento ${attempt + 1} de 3: $lastError", e)
+                try { socket?.close() } catch (_: Exception) {} // limpieza: si el socket ya está roto, no hay nada más que hacer
                 delay(1000) 
             }
         }
@@ -241,13 +263,15 @@ class BluetoothPrinterHelper @Inject constructor(
                 val spaces = 32 - cantidadStr.length - montoItemStr.length
                 write("${if (spaces > 0) cantidadStr + " ".repeat(spaces) + montoItemStr else "$cantidadStr $montoItemStr".take(32)}\n".toByteArray(charset))
 
-                try {
+                // Sin código (venta vieja cuyo producto ya no existe) no hay nada que codificar. Cualquier otro
+                // fallo al armar el código de barras debe abortar la impresión (PrintResult.Error), no imprimirse sin él.
+                if (item.product.code.isNotBlank()) {
                     write(CMD_ALIGN_CENTER)
                     val codeToPrint = if (item.product.unit == ProductUnit.GRANEL) generarCodigoParaPOS(item.product.code, item.totalPrice) else item.product.code
                     printBarcode(this, codeToPrint, type = 73, height = 45, hriPosition = 2)
                     write(CMD_ALIGN_LEFT)
                     write("\n".toByteArray())
-                } catch (_: Exception) { }
+                }
             }
 
             write("--------------------------------\n".toByteArray(charset))
@@ -260,9 +284,7 @@ class BluetoothPrinterHelper @Inject constructor(
 
             val sdfTime = SimpleDateFormat("HHmmss", Locale.getDefault())
             val controlData = "${sdfTime.format(Date(ticket.timestamp))}-$folio"
-            try {
-                printBarcode(this, controlData, type = 73, height = 70, hriPosition = 0)
-            } catch (_: Exception) { }
+            printBarcode(this, controlData, type = 73, height = 70, hriPosition = 0)
 
             write("\n¡GRACIAS POR SU COMPRA!\n".toByteArray(charset))
             write(CMD_FEED_PAPER)

@@ -1,30 +1,77 @@
 package com.example.carniceriaapp20.util
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
-import androidx.core.content.FileProvider
+import com.example.carniceriaapp20.data.local.DaySalesReport
 import com.example.carniceriaapp20.data.local.DepartmentSalesReport
 import com.example.carniceriaapp20.data.local.Product
 import com.example.carniceriaapp20.data.local.ProductSalesReport
 import com.example.carniceriaapp20.data.local.ProductUnit
-import java.io.File
-import java.io.FileOutputStream
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
 object ReportExporter {
 
+    private val mx: Locale = Locale.forLanguageTag("es-MX")
+
+    private fun qty(value: Double): String =
+        if (value % 1 == 0.0) value.toInt().toString() else "%.3f".format(mx, value)
+
+    private fun String.esc(): String = replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    fun formatPeriod(startDate: Long, endDate: Long): String {
+        val fmt = SimpleDateFormat("dd/MM/yyyy", mx)
+        return if (startDate == endDate) fmt.format(Date(startDate))
+        else "${fmt.format(Date(startDate))} - ${fmt.format(Date(endDate))}"
+    }
+
     fun generateHtmlReport(
-        date: Long,
-        totalDay: Double,
+        startDate: Long,
+        endDate: Long,
+        total: Double,
+        ticketCount: Int,
         deptSales: List<DepartmentSalesReport>,
-        prodSales: List<ProductSalesReport>
+        prodSales: List<ProductSalesReport>,
+        dailySales: List<DaySalesReport>
     ): String {
-        val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-        val dateStr = dateFormat.format(Date(date))
-        val currencyFormat = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("es-MX"))
+        val money = NumberFormat.getCurrencyInstance(mx)
+        val dayFmt = SimpleDateFormat("EEEE dd/MM/yyyy", mx)
+        val isSingleDay = startDate == endDate
+        val avgTicket = if (ticketCount > 0) total / ticketCount else 0.0
+        val bestDay = dailySales.maxByOrNull { it.total }
+
+        val kpis = buildString {
+            append("<p><strong>${if (isSingleDay) "Fecha" else "Periodo"}:</strong> ${formatPeriod(startDate, endDate)}</p>")
+            append("<p><strong>Venta total${if (isSingleDay) " del día" else " del periodo"}:</strong> <span class=\"total\">${money.format(total)}</span></p>")
+            append("<p><strong>Tickets:</strong> $ticketCount &nbsp;&nbsp; <strong>Ticket promedio:</strong> ${money.format(avgTicket)}</p>")
+            if (!isSingleDay && dailySales.isNotEmpty()) {
+                append("<p><strong>Días con venta:</strong> ${dailySales.size} &nbsp;&nbsp; <strong>Promedio por día con venta:</strong> ${money.format(total / dailySales.size)}</p>")
+                bestDay?.let { append("<p><strong>Mejor día:</strong> ${dayFmt.format(Date(it.dayStart))} (${money.format(it.total)})</p>") }
+            }
+        }
+
+        val dailyTable = if (isSingleDay || dailySales.isEmpty()) "" else buildString {
+            append("<h2>Ventas por Día</h2><table><thead><tr><th>Día</th><th>Tickets</th><th>Total</th><th>Ticket promedio</th></tr></thead><tbody>")
+            dailySales.forEach {
+                append("<tr><td>${dayFmt.format(Date(it.dayStart))}</td><td>${it.tickets}</td><td>${money.format(it.total)}</td><td>${money.format(it.total / it.tickets)}</td></tr>")
+            }
+            append("<tr class='dept-row'><td>Total</td><td>$ticketCount</td><td>${money.format(total)}</td><td>${money.format(avgTicket)}</td></tr>")
+            append("</tbody></table>")
+        }
+
+        val deptRows = deptSales.joinToString("") {
+            val piezas = if (it.totalPieces > 0) qty(it.totalPieces) else "-"
+            val kilos = if (it.totalKilos > 0) "%.3f".format(mx, it.totalKilos) else "-"
+            "<tr><td>${it.department.esc()}</td><td>$piezas</td><td>$kilos</td><td>${money.format(it.totalAmount)}</td></tr>"
+        }
+
+        val productRows = prodSales.groupBy { it.department }.entries.joinToString("") { (dept, products) ->
+            "<tr class='dept-row'><td colspan='3'>${dept.esc()}</td></tr>" + products.joinToString("") { p ->
+                val unitStr = if (p.effectiveUnit == ProductUnit.GRANEL) "kg" else "pz"
+                "<tr><td>${p.productName.esc()}</td><td>${qty(p.totalQuantity)} $unitStr</td><td>${money.format(p.totalAmount)}</td></tr>"
+            }
+        }
 
         return """
             <!DOCTYPE html>
@@ -45,23 +92,16 @@ object ReportExporter {
             </head>
             <body>
                 <h1>Reporte de Ventas - La Palma</h1>
-                <div class="header">
-                    <p><strong>Fecha:</strong> $dateStr</p>
-                    <p><strong>Venta Total del Día:</strong> <span class="total">${currencyFormat.format(totalDay)}</span></p>
-                </div>
+                <div class="header">$kpis</div>
+
+                $dailyTable
 
                 <h2>Resumen por Departamento</h2>
                 <table>
                     <thead>
                         <tr><th>Departamento</th><th>Piezas</th><th>Kilos</th><th>Total</th></tr>
                     </thead>
-                    <tbody>
-                        ${deptSales.joinToString("") {
-                            val piezas = if (it.totalPieces > 0) (if (it.totalPieces % 1 == 0.0) it.totalPieces.toInt().toString() else "%.3f".format(Locale.forLanguageTag("es-MX"), it.totalPieces)) else "-"
-                            val kilos = if (it.totalKilos > 0) "%.3f".format(Locale.forLanguageTag("es-MX"), it.totalKilos) else "-"
-                            "<tr><td>${it.department}</td><td>$piezas</td><td>$kilos</td><td>${currencyFormat.format(it.totalAmount)}</td></tr>"
-                        }}
-                    </tbody>
+                    <tbody>$deptRows</tbody>
                 </table>
 
                 <h2>Desglose por Producto</h2>
@@ -69,32 +109,27 @@ object ReportExporter {
                     <thead>
                         <tr><th>Producto</th><th>Cantidad</th><th>Importe</th></tr>
                     </thead>
-                    <tbody>
-                        ${prodSales.groupBy { it.department }.entries.joinToString("") { (dept, products) ->
-                            val deptRow = "<tr class='dept-row'><td colspan='3'>$dept</td></tr>"
-                            val productRows = products.joinToString("") { p ->
-                                val qtyStr = if (p.totalQuantity % 1 == 0.0) p.totalQuantity.toInt().toString() else "%.3f".format(Locale.forLanguageTag("es-MX"), p.totalQuantity)
-                                val unitStr = if (p.effectiveUnit == ProductUnit.GRANEL) "kg" else "pz"
-                                "<tr><td>${p.productName}</td><td>$qtyStr $unitStr</td><td>${currencyFormat.format(p.totalAmount)}</td></tr>"
-                            }
-                            deptRow + productRows
-                        }}
-                    </tbody>
+                    <tbody>$productRows</tbody>
                 </table>
 
                 <div class="footer">
-                    Generado por CarniceriaApp 2.0 - ${SimpleDateFormat("HH:mm:ss").format(Date())}
+                    Generado por CarniceriaApp 2.0 - ${SimpleDateFormat("dd/MM/yyyy HH:mm:ss", mx).format(Date())}
                 </div>
             </body>
             </html>
         """.trimIndent()
     }
 
+    // Campos con coma, comillas o salto de línea van entre comillas (RFC 4180) para que un nombre
+    // como "Bistec, corte fino" no se parta en dos columnas al volver a importar.
+    private fun csvField(value: String): String =
+        if (value.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + value.replace("\"", "\"\"") + "\"" else value
+
     fun productsToCsv(products: List<Product>): String {
         val sb = StringBuilder()
         sb.append("codigo,nombre,precio,departamento,unidad\n")
         products.forEach { p ->
-            sb.append("${p.code},${p.name},${p.price},${p.department},${p.unit.name}\n")
+            sb.append("${csvField(p.code)},${csvField(p.name)},${p.price},${csvField(p.department)},${p.unit.name}\n")
         }
         return sb.toString()
     }
@@ -109,22 +144,5 @@ object ReportExporter {
             e.printStackTrace()
             false
         }
-    }
-
-    fun saveAndShareFile(context: Context, fileName: String, content: String) {
-        try {
-            val file = File(context.cacheDir, fileName)
-            FileOutputStream(file).use { it.write(content.toByteArray()) }
-
-            val uri: Uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-            
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = if (fileName.endsWith(".html")) "text/html" else "text/csv"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-
-            context.startActivity(Intent.createChooser(intent, "Compartir archivo..."))
-        } catch (e: Exception) { e.printStackTrace() }
     }
 }

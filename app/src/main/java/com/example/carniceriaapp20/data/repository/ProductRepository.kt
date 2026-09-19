@@ -10,14 +10,13 @@ interface ProductRepository {
     suspend fun getProductByCode(code: String): Product?
 
     suspend fun insertProduct(product: Product)
-    
-    suspend fun insertProducts(products: List<Product>)
+
+    // Borra todo el catálogo e inserta el nuevo en UNA transacción: si algo falla, no cambia nada.
+    suspend fun replaceAllProducts(products: List<Product>)
 
     suspend fun updateProduct(product: Product)
 
     suspend fun deleteProduct(product: Product)
-
-    suspend fun deleteAllProducts()
 
     fun getTopSellingProducts(): Flow<List<Product>>
 }

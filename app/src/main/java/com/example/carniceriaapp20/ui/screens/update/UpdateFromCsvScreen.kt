@@ -109,6 +109,14 @@ fun UpdateFromCsvScreen(
             is UpdateResult.Success -> {
                 Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
                 Text("¡Éxito! ${result.count} productos actualizados.", style = MaterialTheme.typography.titleMedium)
+                if (result.skipped > 0) {
+                    Text(
+                        "${result.skipped} líneas se omitieron (datos inválidos o código repetido).",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.height(24.dp))
                 Button(onClick = { viewModel.resetState() }) { Text("ENTENDIDO") }
             }

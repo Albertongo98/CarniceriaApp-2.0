@@ -19,4 +19,6 @@ interface TicketRepository {
     suspend fun countTicketsOfDay(startOfDay: Long): Int
 
     suspend fun getProductSalesReport(startTime: Long, endTime: Long): List<ProductSalesReport>
+
+    suspend fun getTicketsBetween(startTime: Long, endTime: Long): List<Ticket>
 }
