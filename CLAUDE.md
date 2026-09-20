@@ -20,7 +20,7 @@ Navegación (`ui/navigation/AppNavigation.kt`): la app arranca **directo en el T
 - Configurar impresora (diálogo: dispositivos Bluetooth emparejados; la MAC se guarda en DataStore).
 
 ### Historial (`ui/screens/history`)
-Lista de todos los tickets (los anulados se ven marcados); tocar = vista previa; mantener presionado = modo selección; **imprimir selección en lote** (auditoría, 1 s entre tickets); **reimprimir** un ticket lo imprime exactamente como se vendió (`TicketItem.toCartItem()`). **Anular ticket** 🔒: pide PIN y un **motivo obligatorio**; el ticket NO se borra, queda `voided_at`/`void_reason`, sale de reportes y "más vendidos", lo vendido regresa a existencias, y si se reimprime lleva `*** ANULADO ***` y el motivo.
+Lista de todos los tickets (los anulados se ven marcados); tocar = vista previa; mantener presionado = modo selección; **imprimir selección en lote** (auditoría, 1 s entre tickets); **reimprimir** un ticket lo imprime exactamente como se vendió (`TicketItem.toCartItem()`). **Anular ticket**: NO pide PIN (decisión del dueño), solo un **motivo obligatorio**; el ticket NO se borra, queda `voided_at`/`void_reason`, sale de reportes y "más vendidos", lo vendido regresa a existencias, y si se reimprime lleva `*** ANULADO ***` y el motivo.
 
 ### Reportes (`ui/screens/reports`) 🔒
 Reporte de ventas por **rango de fechas de hasta 31 días** (`MAX_RANGE_DAYS`, cubre cualquier mes calendario). Filtros: chips **Hoy / 7 días / Este mes / Mes anterior** y botones **Desde / Hasta** (el "Hasta" solo permite hasta 31 días después del "Desde" y nunca fechas futuras; si el rango queda inválido el ViewModel lo ajusta). Muestra: total, **tickets, ticket promedio, promedio por día con venta**, **ventas por día**, **resumen por departamento separando piezas y kilos** (nunca se suman entre sí) y desglose por producto. Excluye tickets anulados. Acciones: **imprimir corte de caja** y **descargar HTML** (`reporte_yyyyMMdd_yyyyMMdd.html`) con la misma información.
@@ -69,7 +69,7 @@ PIN de 4–8 dígitos guardado como SHA-256 con sal (`PinManager`, DataStore). S
 14. El botón principal dice **FINALIZAR** y siempre pasa por el diálogo de confirmación antes de imprimir.
 
 ### Seguridad y errores
-15. Las acciones sensibles pasan por `rememberPinGate().require { ... }` (y `pinGate.Dialog()` en la pantalla). No agregar acciones destructivas sin PIN.
+15. Las acciones sensibles pasan por `rememberPinGate().require { ... }` (y `pinGate.Dialog()` en la pantalla). No agregar acciones destructivas sin PIN (excepción decidida por el dueño: anular ticket, que no borra nada y exige motivo).
 16. **No tragarse errores**: usar `AppLog.e(tag, mensaje, e)` (o mostrar el error al usuario). `catch` vacíos solo para limpieza de recursos, con comentario.
 
 ### Arquitectura

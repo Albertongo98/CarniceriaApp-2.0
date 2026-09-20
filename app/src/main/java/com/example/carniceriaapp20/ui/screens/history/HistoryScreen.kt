@@ -26,7 +26,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.carniceriaapp20.data.local.TicketWithItems
 import com.example.carniceriaapp20.data.local.isVoided
-import com.example.carniceriaapp20.ui.composables.rememberPinGate
 import com.example.carniceriaapp20.util.PrintResult
 import java.text.SimpleDateFormat
 import java.util.*
@@ -41,7 +40,6 @@ fun HistoryScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showPreviewDialog by remember { mutableStateOf<TicketWithItems?>(null) }
     var voidTarget by remember { mutableStateOf<TicketWithItems?>(null) }
-    val pinGate = rememberPinGate()
 
     LaunchedEffect(key1 = uiState.message) {
         uiState.message?.let {
@@ -166,7 +164,7 @@ fun HistoryScreen(
             onVoid = {
                 val target = showPreviewDialog!!
                 showPreviewDialog = null
-                pinGate.require { voidTarget = target }
+                voidTarget = target
             }
         )
     }
@@ -181,8 +179,6 @@ fun HistoryScreen(
             onDismiss = { voidTarget = null }
         )
     }
-
-    pinGate.Dialog()
 }
 
 @Composable

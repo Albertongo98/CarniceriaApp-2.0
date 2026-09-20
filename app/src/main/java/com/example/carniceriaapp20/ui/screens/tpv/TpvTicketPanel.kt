@@ -103,7 +103,7 @@ private fun TicketTabs(
                 text = {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                         Text(
-                            "T${index + 1}",
+                            "Ticket ${index + 1}",
                             style = if (isTablet) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                         )
@@ -117,7 +117,8 @@ private fun TicketTabs(
                                 Icon(
                                     Icons.Default.Close,
                                     contentDescription = "Cerrar ticket ${index + 1}",
-                                    modifier = Modifier.size(if (isTablet) 16.dp else 14.dp)
+                                    modifier = Modifier.size(if (isTablet) 16.dp else 14.dp),
+                                    tint = MaterialTheme.colorScheme.error
                                 )
                             }
                         }
