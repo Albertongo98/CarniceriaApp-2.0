@@ -1,5 +1,7 @@
 package com.example.carniceriaapp20.ui.screens.history
 
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import com.example.carniceriaapp20.util.formatMoney2
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -17,11 +19,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.carniceriaapp20.data.local.TicketWithItems
+import com.example.carniceriaapp20.data.local.isVoided
+import com.example.carniceriaapp20.ui.composables.rememberPinGate
 import com.example.carniceriaapp20.util.PrintResult
 import java.text.SimpleDateFormat
 import java.util.*
@@ -35,6 +40,15 @@ fun HistoryScreen(
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showPreviewDialog by remember { mutableStateOf<TicketWithItems?>(null) }
+    var voidTarget by remember { mutableStateOf<TicketWithItems?>(null) }
+    val pinGate = rememberPinGate()
+
+    LaunchedEffect(key1 = uiState.message) {
+        uiState.message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.onMessageConsumed()
+        }
+    }
 
     LaunchedEffect(key1 = uiState.printResult) {
         uiState.printResult?.let { result ->
@@ -59,7 +73,7 @@ fun HistoryScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = { if (uiState.isSelectionMode) viewModel.clearSelection() else onNavigateBack() }) {
-                        Icon(if (uiState.isSelectionMode) Icons.Default.Close else Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Icon(if (uiState.isSelectionMode) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 },
                 actions = {
@@ -148,9 +162,60 @@ fun HistoryScreen(
                 viewModel.toggleTicketSelection(id)
                 viewModel.printSelectedTicketsForAudit()
                 showPreviewDialog = null
+            },
+            onVoid = {
+                val target = showPreviewDialog!!
+                showPreviewDialog = null
+                pinGate.require { voidTarget = target }
             }
         )
     }
+
+    voidTarget?.let { target ->
+        VoidReasonDialog(
+            folio = target.ticket.dailyFolio.toString().padStart(3, '0'),
+            onConfirm = { reason ->
+                viewModel.voidTicket(target.ticket.id, reason)
+                voidTarget = null
+            },
+            onDismiss = { voidTarget = null }
+        )
+    }
+
+    pinGate.Dialog()
+}
+
+@Composable
+fun VoidReasonDialog(folio: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    var reason by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Anular ticket $folio", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                Text(
+                    "El ticket no se borra: queda marcado como ANULADO, sale de los reportes y lo vendido regresa a existencias.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = reason,
+                    onValueChange = { reason = it.take(60) },
+                    label = { Text("Motivo (obligatorio)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(reason) },
+                enabled = reason.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) { Text("ANULAR") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("CANCELAR") } }
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -173,7 +238,11 @@ fun TicketListItem(
             ),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.outlinedCardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface
+            containerColor = when {
+                isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                ticketWithItems.ticket.isVoided -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
+                else -> MaterialTheme.colorScheme.surface
+            }
         ),
         border = androidx.compose.foundation.BorderStroke(
             width = if (isSelected) 2.dp else 1.dp,
@@ -209,6 +278,18 @@ fun TicketListItem(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline
                     )
+                    if (ticketWithItems.ticket.isVoided) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(color = MaterialTheme.colorScheme.error, shape = RoundedCornerShape(4.dp)) {
+                            Text(
+                                text = "ANULADO",
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onError
+                            )
+                        }
+                    }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -219,9 +300,10 @@ fun TicketListItem(
             }
 
             Text(
-                text = "$" + "%.2f".format(ticketWithItems.ticket.totalAmount),
+                text = "$" + formatMoney2(ticketWithItems.ticket.totalAmount),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Black,
+                textDecoration = if (ticketWithItems.ticket.isVoided) TextDecoration.LineThrough else null,
                 color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
             )
         }
@@ -232,7 +314,8 @@ fun TicketListItem(
 fun TicketPreviewDialog(
     ticketWithItems: TicketWithItems,
     onDismiss: () -> Unit,
-    onPrint: () -> Unit
+    onPrint: () -> Unit,
+    onVoid: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -260,6 +343,16 @@ fun TicketPreviewDialog(
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        if (ticketWithItems.ticket.isVoided) {
+                            Text(
+                                "*** ANULADO ***" + (ticketWithItems.ticket.voidReason?.let { "\nMotivo: $it" } ?: ""),
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                         Text(
                             "LA PALMA CARNICERIA",
                             modifier = Modifier.fillMaxWidth(),
@@ -282,7 +375,7 @@ fun TicketPreviewDialog(
                                     Text(item.productName.uppercase(), fontWeight = FontWeight.Bold, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Text("${item.quantity} x $${item.unitPrice}", fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                                        Text("$${"%.2f".format(item.totalPrice)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                        Text("$${formatMoney2(item.totalPrice)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                                     }
                                 }
                             }
@@ -297,7 +390,7 @@ fun TicketPreviewDialog(
                         )
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("TOTAL:", fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                            Text("$${"%.2f".format(ticketWithItems.ticket.totalAmount)}", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, fontFamily = FontFamily.Monospace, color = Color(0xFF1B5E20))
+                            Text("$${formatMoney2(ticketWithItems.ticket.totalAmount)}", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, fontFamily = FontFamily.Monospace, color = Color(0xFF1B5E20))
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
@@ -322,6 +415,20 @@ fun TicketPreviewDialog(
                     Icon(Icons.Default.Print, contentDescription = null)
                     Spacer(Modifier.width(12.dp))
                     Text("REIMPRIMIR TICKET", fontWeight = FontWeight.Bold)
+                }
+
+                if (!ticketWithItems.ticket.isVoided) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = onVoid,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(Icons.Default.Block, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("ANULAR TICKET", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }

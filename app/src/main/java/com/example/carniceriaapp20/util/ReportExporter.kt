@@ -68,7 +68,7 @@ object ReportExporter {
 
         val productRows = prodSales.groupBy { it.department }.entries.joinToString("") { (dept, products) ->
             "<tr class='dept-row'><td colspan='3'>${dept.esc()}</td></tr>" + products.joinToString("") { p ->
-                val unitStr = if (p.effectiveUnit == ProductUnit.GRANEL) "kg" else "pz"
+                val unitStr = if (p.unit == ProductUnit.GRANEL) "kg" else "pz"
                 "<tr><td>${p.productName.esc()}</td><td>${qty(p.totalQuantity)} $unitStr</td><td>${money.format(p.totalAmount)}</td></tr>"
             }
         }
@@ -127,9 +127,9 @@ object ReportExporter {
 
     fun productsToCsv(products: List<Product>): String {
         val sb = StringBuilder()
-        sb.append("codigo,nombre,precio,departamento,unidad\n")
+        sb.append("codigo,nombre,precio,departamento,unidad,existencia,minimo\n")
         products.forEach { p ->
-            sb.append("${csvField(p.code)},${csvField(p.name)},${p.price},${csvField(p.department)},${p.unit.name}\n")
+            sb.append("${csvField(p.code)},${csvField(p.name)},${p.price},${csvField(p.department)},${p.unit.name},${p.stock?.let(::formatPlain) ?: ""},${formatPlain(p.minStock)}\n")
         }
         return sb.toString()
     }

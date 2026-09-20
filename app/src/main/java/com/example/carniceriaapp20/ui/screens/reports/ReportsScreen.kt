@@ -1,5 +1,6 @@
 package com.example.carniceriaapp20.ui.screens.reports
 
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -94,7 +95,7 @@ fun ReportsScreen(
                 title = { Text("Reportes de Venta", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 },
                 actions = {
@@ -271,7 +272,7 @@ fun ReportsScreen(
                                 productName = prod.productName,
                                 quantity = prod.totalQuantity,
                                 amount = prod.totalAmount,
-                                unit = prod.effectiveUnit,
+                                unit = prod.unit,
                                 currencyFormat = currencyFormat
                             )
                         }
@@ -298,7 +299,7 @@ private fun DaySalesRow(day: DaySalesReport, format: NumberFormat) {
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column {
                 Text(dayFormat.format(Date(day.dayStart)).replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                 Text("${day.tickets} tickets", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
@@ -344,7 +345,7 @@ private fun ReportDatePickerDialog(
 @Composable
 fun DepartmentReportItem(dept: String, amount: Double, pieces: Double, kilos: Double, format: NumberFormat) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column {
                 Text(dept, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 val reportLocale = Locale.forLanguageTag("es-MX")

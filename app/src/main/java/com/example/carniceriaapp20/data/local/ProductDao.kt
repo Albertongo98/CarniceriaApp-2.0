@@ -2,8 +2,6 @@ package com.example.carniceriaapp20.data.local
 
 import androidx.room.Dao
 import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import androidx.room.Upsert
@@ -18,13 +16,17 @@ interface ProductDao {
     @Query("SELECT * FROM products WHERE code = :code")
     suspend fun getProductByCode(code: String): Product?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertProduct(product: Product)
-
     // Upsert (INSERT + UPDATE) y NO REPLACE: REPLACE borra la fila vieja y, con las claves foráneas
     // activas, deja en NULL el product_code de todas las ventas históricas de ese producto.
     @Upsert
+    suspend fun insertProduct(product: Product)
+
+    @Upsert
     suspend fun upsertProducts(products: List<Product>)
+
+    // delta negativo = venta, positivo = anulación/entrada. Solo afecta productos con existencia controlada.
+    @Query("UPDATE products SET stock = ROUND(stock + :delta, 3) WHERE code = :code AND stock IS NOT NULL")
+    suspend fun adjustStock(code: String, delta: Double)
 
     @Query("SELECT code FROM products")
     suspend fun getAllCodes(): List<String>

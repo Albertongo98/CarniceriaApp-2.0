@@ -28,6 +28,11 @@ Esta versión 2.0 ha sido reconstruida desde cero utilizando tecnologías modern
 *   **Gestión de Folios Diarios:** Reinicio automático del contador de folios cada día.
 *   **Reportes de Ventas:** Corte por fecha con resumen por departamento (piezas y kilos por separado), impresión de corte de caja y exportación a HTML.
 *   **Historial Completo:** Los tickets se conservan; las migraciones de base de datos preservan productos y ventas entre versiones.
+*   **Anulación de Tickets:** Con PIN y motivo obligatorio; el ticket no se borra (queda marcado), sale de los reportes y regresa lo vendido a existencias.
+*   **Existencias:** Control opcional por producto (kg o piezas) con inventario mínimo, avisos de "bajo inventario" y descuento automático en cada venta.
+*   **Respaldo y Restauración:** Exporta/restaura toda la base (catálogo y ventas) como archivo, con aviso cuando hace días que no se respalda.
+*   **Seguridad por PIN:** Protege reportes, actualización de catálogo, respaldo, borrado de productos y anulaciones.
+*   **Registro de Errores:** Bitácora local exportable para diagnosticar fallos de impresión o importación.
 
 ## 🚀 Stack Tecnológico
 

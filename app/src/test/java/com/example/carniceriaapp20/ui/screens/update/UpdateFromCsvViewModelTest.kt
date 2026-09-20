@@ -149,4 +149,46 @@ class UpdateFromCsvViewModelTest {
         assertTrue(result is UpdateResult.Error)
         assertTrue((result as UpdateResult.Error).message.contains("no se modific"))
     }
+
+    @Test
+    fun `importa existencia y minimo del formato external`() = runTest {
+        val csvContent = "id,codigo,producto,extra,precio,extra2,departamento,existencia,minimo,extra5,unidad\n" +
+                "0,55,Bistec,,\$123.45,,Carniceria,\"1,785.5\",20,,GRANEL"
+
+        viewModel.importProductsFromCsv(csvContent)
+
+        verify(mockRepository).replaceAllProducts(
+            listOf(Product("55", "Bistec", 123.45, "Carniceria", ProductUnit.GRANEL, stock = 1785.5, minStock = 20.0))
+        )
+    }
+
+    @Test
+    fun `unifica departamentos escritos distinto y pone Sin departamento a los vacios`() = runTest {
+        val csvContent = "codigo,nombre,precio,departamento,unidad\n" +
+                "1,Res,150.0,Carnicería,GRANEL\n" +
+                "2,Cerdo,90.0, carniceria ,GRANEL\n" +
+                "3,Sal,10.0,,UNIDAD"
+
+        viewModel.importProductsFromCsv(csvContent)
+
+        verify(mockRepository).replaceAllProducts(
+            listOf(
+                Product("1", "Res", 150.0, "Carnicería", ProductUnit.GRANEL),
+                Product("2", "Cerdo", 90.0, "Carnicería", ProductUnit.GRANEL),
+                Product("3", "Sal", 10.0, "Sin departamento", ProductUnit.UNIDAD)
+            )
+        )
+    }
+
+    @Test
+    fun `la exportacion lleva existencia y minimo y se importa sin perdida`() = runTest {
+        val original = listOf(
+            Product("1", "Res", 150.0, "Carniceria", ProductUnit.GRANEL, stock = 12.5, minStock = 5.0),
+            Product("2", "Sal", 10.0, "Abarrotes", ProductUnit.UNIDAD) // sin controlar existencia
+        )
+
+        viewModel.importProductsFromCsv(ReportExporter.productsToCsv(original))
+
+        verify(mockRepository).replaceAllProducts(original)
+    }
 }

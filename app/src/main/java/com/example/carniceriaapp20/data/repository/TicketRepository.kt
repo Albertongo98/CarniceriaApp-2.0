@@ -8,7 +8,12 @@ import kotlinx.coroutines.flow.Flow
 
 interface TicketRepository {
 
+    // Guarda ticket + renglones y descuenta existencias, todo en una transacción.
     suspend fun saveTicket(ticket: Ticket, items: List<TicketItem>): Long
+
+    // Marca el ticket como anulado (no lo borra) y regresa lo vendido a existencias.
+    // false si no existe o ya estaba anulado.
+    suspend fun voidTicket(ticketId: Long, reason: String): Boolean
 
     fun getAllTicketsWithItems(): Flow<List<TicketWithItems>>
 

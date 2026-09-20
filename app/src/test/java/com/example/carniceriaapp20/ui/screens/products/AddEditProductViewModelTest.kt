@@ -44,7 +44,7 @@ class AddEditProductViewModelTest {
         val expectedState = AddEditProductUiState(
             code = "1",
             name = "Test",
-            price = "10.0",
+            price = "10",
             department = "Dept",
             unit = ProductUnit.UNIDAD,
             isEditing = true
@@ -97,6 +97,53 @@ class AddEditProductViewModelTest {
 
         verify(mockRepository, never()).insertProduct(any())
         verify(mockRepository, never()).updateProduct(any())
+    }
+
+    @Test
+    fun `no guarda un producto sin departamento`() = runTest {
+        viewModel = AddEditProductViewModel(mockRepository, SavedStateHandle())
+        viewModel.onCodeChange("3")
+        viewModel.onNameChange("Sal")
+        viewModel.onPriceChange("30")
+        viewModel.onDepartmentChange("   ")
+
+        viewModel.saveProduct()
+
+        verify(mockRepository, never()).insertProduct(any())
+    }
+
+    @Test
+    fun `acepta precio con coma, reutiliza el departamento existente y guarda la existencia`() = runTest {
+        whenever(mockRepository.getAllProducts())
+            .thenReturn(flowOf(listOf(Product("9", "Otro", 1.0, "Carnicería", ProductUnit.GRANEL))))
+        viewModel = AddEditProductViewModel(mockRepository, SavedStateHandle())
+        viewModel.onCodeChange("2")
+        viewModel.onNameChange("  Bistec  ")
+        viewModel.onPriceChange("20,5")
+        viewModel.onDepartmentChange(" carniceria ")
+        viewModel.onUnitChange(ProductUnit.GRANEL)
+        viewModel.onStockChange("3,5")
+        viewModel.onMinStockChange("1")
+
+        viewModel.saveProduct()
+
+        verify(mockRepository).insertProduct(
+            Product("2", "Bistec", 20.5, "Carnicería", ProductUnit.GRANEL, stock = 3.5, minStock = 1.0)
+        )
+    }
+
+    @Test
+    fun `una existencia que no es numero no se guarda`() = runTest {
+        viewModel = AddEditProductViewModel(mockRepository, SavedStateHandle())
+        viewModel.onCodeChange("2")
+        viewModel.onNameChange("Sal")
+        viewModel.onPriceChange("10")
+        viewModel.onDepartmentChange("Abarrotes")
+        viewModel.onStockChange("mucho")
+
+        viewModel.saveProduct()
+
+        verify(mockRepository, never()).insertProduct(any())
     }
 
     @After

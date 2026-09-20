@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
@@ -34,6 +36,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.carniceriaapp20.data.local.ProductUnit
+import com.example.carniceriaapp20.util.parseDecimal
 import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,6 +72,7 @@ fun AddEditProductScreen(
                 .padding(it)
                 .padding(16.dp)
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
         ) {
             Text(
                 text = if (uiState.isEditing) "Editar Producto" else "Añadir Producto",
@@ -101,7 +105,7 @@ fun AddEditProductScreen(
                 label = { Text("Precio") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                isError = uiState.price.toDoubleOrNull() == null || uiState.price.toDouble() <= 0.0
+                isError = (parseDecimal(uiState.price) ?: 0.0) <= 0.0
             )
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -166,6 +170,28 @@ fun AddEditProductScreen(
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = uiState.stock,
+                onValueChange = viewModel::onStockChange,
+                label = { Text(if (uiState.unit == ProductUnit.GRANEL) "Existencia en kg (opcional)" else "Existencia en piezas (opcional)") },
+                supportingText = { Text("Déjala vacía si no quieres controlar la existencia de este producto") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                isError = uiState.stock.isNotBlank() && parseDecimal(uiState.stock) == null
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = uiState.minStock,
+                onValueChange = viewModel::onMinStockChange,
+                label = { Text("Inventario mínimo (opcional)") },
+                supportingText = { Text("Se marca \"bajo inventario\" cuando la existencia llega a este nivel") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                isError = uiState.minStock.isNotBlank() && (parseDecimal(uiState.minStock) ?: -1.0) < 0
+            )
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(

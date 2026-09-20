@@ -6,17 +6,16 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.carniceriaapp20.ui.screens.backup.BackupScreen
 import com.example.carniceriaapp20.ui.screens.generador.LabelGeneratorScreen
 import com.example.carniceriaapp20.ui.screens.history.HistoryScreen
 import com.example.carniceriaapp20.ui.screens.products.AddEditProductScreen
 import com.example.carniceriaapp20.ui.screens.products.ProductListScreen
 import com.example.carniceriaapp20.ui.screens.tpv.TpvScreen
 import com.example.carniceriaapp20.ui.screens.update.UpdateFromCsvScreen
-import com.example.carniceriaapp20.ui.screens.splash.SplashScreen
 import com.example.carniceriaapp20.ui.screens.reports.ReportsScreen
 
 object Routes {
-    const val SPLASH = "splash"
     const val TPV = "tpv"
     const val PRODUCT_LIST = "product_list"
     const val ADD_EDIT_PRODUCT = "add_edit_product"
@@ -25,19 +24,13 @@ object Routes {
     const val UPDATE_FROM_CSV = "update_from_csv"
     const val LABEL_GENERATOR = "label_generator"
     const val REPORTS = "reports"
+    const val BACKUP = "backup"
 }
 
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = Routes.SPLASH) {
-        composable(Routes.SPLASH) {
-            SplashScreen(onTimeout = {
-                navController.navigate(Routes.TPV) {
-                    popUpTo(Routes.SPLASH) { inclusive = true }
-                }
-            })
-        }
+    NavHost(navController = navController, startDestination = Routes.TPV) {
         composable(Routes.TPV) {
             TpvScreen(navController = navController)
         }
@@ -80,6 +73,11 @@ fun AppNavigation() {
         }
         composable(Routes.REPORTS) {
             ReportsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable(Routes.BACKUP) {
+            BackupScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

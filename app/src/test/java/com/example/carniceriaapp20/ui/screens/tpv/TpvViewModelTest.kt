@@ -40,6 +40,7 @@ class TpvViewModelTest {
         // Common setup: always return a flow of products
         whenever(productRepository.getAllProducts()).thenReturn(flowOf(listOf(product1, product2)))
         whenever(userPreferencesRepository.printerMacAddress).thenReturn(flowOf(null))
+        whenever(userPreferencesRepository.lastBackupAt).thenReturn(flowOf(System.currentTimeMillis()))
         viewModel = TpvViewModel(productRepository, ticketRepository, printerHelper, userPreferencesRepository)
     }
 

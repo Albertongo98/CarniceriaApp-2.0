@@ -1,5 +1,6 @@
 package com.example.carniceriaapp20.ui.composables
 
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -7,7 +8,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -98,7 +98,7 @@ fun QwertyKeyboard(
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.error),
                     contentPadding = PaddingValues(0.dp),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
-                ) { Icon(Icons.Default.Backspace, contentDescription = null, modifier = Modifier.size(28.dp)) }
+                ) { Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = null, modifier = Modifier.size(28.dp)) }
                 Spacer(modifier = Modifier.weight(0.1f))
             }
         }

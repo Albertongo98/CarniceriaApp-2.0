@@ -46,10 +46,10 @@ class ReportsViewModelTest {
     }
 
     @Test
-    fun `report separa piezas de kilos infiriendo la unidad cuando el producto ya no existe`() = runTest {
+    fun `report separa piezas de kilos segun la unidad guardada en la venta`() = runTest {
         stubRepository(
             products = listOf(
-                ProductSalesReport("Bistec", "1", 500.0, 2.5, "Carniceria", null), // sin unidad + decimales => kg
+                ProductSalesReport("Bistec", "1", 500.0, 2.5, "Carniceria", ProductUnit.GRANEL),
                 ProductSalesReport("Chorizo", "2", 60.0, 3.0, "Carniceria", ProductUnit.UNIDAD),
                 ProductSalesReport("Tomate", "3", 40.0, 2.0, "Verdura", ProductUnit.GRANEL)
             )

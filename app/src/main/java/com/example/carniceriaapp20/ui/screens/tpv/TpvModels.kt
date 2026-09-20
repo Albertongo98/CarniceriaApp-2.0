@@ -1,6 +1,7 @@
 package com.example.carniceriaapp20.ui.screens.tpv
 
 import com.example.carniceriaapp20.data.local.Product
+import com.example.carniceriaapp20.data.local.TicketItem
 import java.util.UUID
 
 data class CartItem(
@@ -13,6 +14,22 @@ data class CartItem(
     val totalPrice: Double
         get() = customPrice ?: (product.price * quantity)
 }
+
+// Reconstruye el renglón tal como se vendió (unidad, departamento y total guardados en la venta).
+// customPrice = totalPrice fija el total exacto aunque el precio del catálogo haya cambiado o el
+// importe se haya tecleado a mano.
+fun TicketItem.toCartItem(): CartItem = CartItem(
+    product = Product(
+        code = productCode ?: "",
+        name = productName,
+        price = unitPrice,
+        department = productDepartment,
+        unit = unit
+    ),
+    quantity = quantity,
+    customPrice = totalPrice,
+    estimatedPieces = estimatedPieces
+)
 
 data class TicketState(
     val id: Int,

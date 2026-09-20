@@ -48,5 +48,10 @@ data class TicketItem(
     val totalPrice: Double,
 
     @ColumnInfo(name = "estimated_pieces")
-    val estimatedPieces: Int? = null
+    val estimatedPieces: Int? = null,
+
+    // Unidad con la que se vendió. Se guarda en la venta para no depender del catálogo actual
+    // (que cambia al reimportar el CSV).
+    @ColumnInfo(name = "unit")
+    val unit: ProductUnit = ProductUnit.UNIDAD
 )

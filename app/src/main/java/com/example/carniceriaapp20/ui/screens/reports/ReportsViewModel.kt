@@ -8,6 +8,7 @@ import com.example.carniceriaapp20.data.local.ProductSalesReport
 import com.example.carniceriaapp20.data.local.ProductUnit
 import com.example.carniceriaapp20.data.repository.TicketRepository
 import com.example.carniceriaapp20.util.BluetoothPrinterHelper
+import com.example.carniceriaapp20.util.NO_DEPARTMENT
 import com.example.carniceriaapp20.util.PrintResult
 import com.example.carniceriaapp20.util.ReportExporter
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -122,7 +123,9 @@ class ReportsViewModel @Inject constructor(
             val from = _uiState.value.startDate
             val until = addDays(_uiState.value.endDate, 1)
 
+            // Ventas viejas pueden traer el departamento vacío.
             val prodSales = ticketRepository.getProductSalesReport(from, until)
+                .map { if (it.department.isBlank()) it.copy(department = NO_DEPARTMENT) else it }
             val tickets = ticketRepository.getTicketsBetween(from, until)
 
             // Se deriva del desglose por producto (que ya trae la unidad de cada uno) en vez de
@@ -130,7 +133,7 @@ class ReportsViewModel @Inject constructor(
             // cifra no significa nada (ej. "5.5 movs." de 3 piezas + 2.5 kg).
             val deptSales = prodSales.groupBy { it.department }
                 .map { (department, items) ->
-                    val (granel, unidad) = items.partition { it.effectiveUnit == ProductUnit.GRANEL }
+                    val (granel, unidad) = items.partition { it.unit == ProductUnit.GRANEL }
                     DepartmentSalesReport(
                         department = department,
                         totalAmount = items.sumOf { it.totalAmount },

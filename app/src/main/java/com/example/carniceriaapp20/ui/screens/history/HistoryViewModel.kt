@@ -2,13 +2,11 @@ package com.example.carniceriaapp20.ui.screens.history
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.carniceriaapp20.data.local.Product
-import com.example.carniceriaapp20.data.local.ProductUnit
 import com.example.carniceriaapp20.data.local.Ticket
-import com.example.carniceriaapp20.data.local.TicketItem
 import com.example.carniceriaapp20.data.local.TicketWithItems
 import com.example.carniceriaapp20.data.repository.TicketRepository
 import com.example.carniceriaapp20.ui.screens.tpv.CartItem
+import com.example.carniceriaapp20.ui.screens.tpv.toCartItem
 import com.example.carniceriaapp20.util.BluetoothPrinterHelper
 import com.example.carniceriaapp20.util.PrintResult
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,7 +21,8 @@ data class HistoryUiState(
     val printResult: PrintResult? = null,
     val selectedTicketIds: Set<Long> = emptySet(),
     val isSelectionMode: Boolean = false,
-    val isPrinting: Boolean = false
+    val isPrinting: Boolean = false,
+    val message: String? = null
 )
 
 @HiltViewModel
@@ -36,19 +35,22 @@ class HistoryViewModel @Inject constructor(
     private val _ticketsWithItems: Flow<List<TicketWithItems>> = ticketRepository.getAllTicketsWithItems()
     private val _selectedTicketIds = MutableStateFlow<Set<Long>>(emptySet())
     private val _isPrinting = MutableStateFlow(false)
+    private val _message = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<HistoryUiState> = combine(
         _ticketsWithItems, 
         _printResult, 
         _selectedTicketIds,
-        _isPrinting
-    ) { tickets: List<TicketWithItems>, printResult: PrintResult?, selectedIds: Set<Long>, printing: Boolean ->
+        _isPrinting,
+        _message
+    ) { tickets: List<TicketWithItems>, printResult: PrintResult?, selectedIds: Set<Long>, printing: Boolean, message: String? ->
         HistoryUiState(
             tickets = tickets,
             printResult = printResult,
             selectedTicketIds = selectedIds,
             isSelectionMode = selectedIds.isNotEmpty(),
-            isPrinting = printing
+            isPrinting = printing,
+            message = message
         )
     }.stateIn(
         scope = viewModelScope,
@@ -85,21 +87,7 @@ class HistoryViewModel @Inject constructor(
             
             // Especificamos el tipo de batchData para ayudar al compilador
             val batchData: List<Pair<Ticket, List<CartItem>>> = selectedTickets.map { ticketWithItems: TicketWithItems ->
-                val cartItems: List<CartItem> = ticketWithItems.items.map { ticketItem: TicketItem ->
-                    val isProbablyGranel = ticketItem.quantity % 1.0 != 0.0 || ticketItem.unitPrice == ticketItem.totalPrice
-                    CartItem(
-                        product = Product(
-                            code = ticketItem.productCode ?: "",
-                            name = ticketItem.productName,
-                            price = ticketItem.unitPrice,
-                            department = "", 
-                            unit = if(isProbablyGranel) ProductUnit.GRANEL else ProductUnit.UNIDAD
-                        ),
-                        quantity = ticketItem.quantity,
-                        customPrice = if (ticketItem.unitPrice == ticketItem.totalPrice && ticketItem.quantity != 1.0) ticketItem.totalPrice else null
-                    )
-                }
-                Pair(ticketWithItems.ticket, cartItems)
+                Pair(ticketWithItems.ticket, ticketWithItems.items.map { it.toCartItem() })
             }
 
             // Especificamos el tipo genérico <PrintResult> en withContext
@@ -111,6 +99,17 @@ class HistoryViewModel @Inject constructor(
             _isPrinting.value = false
             if (finalResult is PrintResult.Success) clearSelection()
         }
+    }
+
+    fun voidTicket(ticketId: Long, reason: String) {
+        viewModelScope.launch {
+            val voided = ticketRepository.voidTicket(ticketId, reason.trim())
+            _message.value = if (voided) "Ticket anulado" else "No se pudo anular el ticket (ya estaba anulado)"
+        }
+    }
+
+    fun onMessageConsumed() {
+        _message.value = null
     }
 
     fun onPrintResultConsumed() {

@@ -43,6 +43,24 @@ class TpvViewModel @Inject constructor(
     private val _pairedDevices = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     private val _selectedPrinterMac = userPreferencesRepository.printerMacAddress
 
+    // Aviso al abrir el TPV si hace 7 días o más que no se respalda (o nunca): el historial vive solo en la tablet.
+    private val _backupReminder = MutableStateFlow<String?>(null)
+    val backupReminder: StateFlow<String?> = _backupReminder.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val last = userPreferencesRepository.lastBackupAt.first()
+            val days = last?.let { (System.currentTimeMillis() - it) / 86_400_000L }
+            _backupReminder.value = when {
+                last == null -> "Aún no has respaldado tus ventas. Hazlo en Menú > Respaldo y diagnóstico."
+                days!! >= 7 -> "Hace $days días que no respaldas tus ventas (Menú > Respaldo y diagnóstico)."
+                else -> null
+            }
+        }
+    }
+
+    fun onBackupReminderShown() { _backupReminder.value = null }
+
     private val _fastProducts = productRepository.getTopSellingProducts()
         .onStart { emit(emptyList()) }
         .catch { emit(emptyList()) }
@@ -116,7 +134,8 @@ class TpvViewModel @Inject constructor(
                         quantity = it.quantity,
                         unitPrice = it.customPrice ?: it.product.price,
                         totalPrice = it.totalPrice,
-                        estimatedPieces = it.estimatedPieces
+                        estimatedPieces = it.estimatedPieces,
+                        unit = it.product.unit
                     )
                 })
 
@@ -312,17 +331,7 @@ class TpvViewModel @Inject constructor(
                 if (lastTicket != null) {
                     val lastTicketWithItems = ticketRepository.getTicketWithItems(lastTicket.id).first()
                     if (lastTicketWithItems != null) {
-                        val productMap = productRepository.getAllProducts().first().associateBy { it.code }
-                        val cartItems = lastTicketWithItems.items.map { ticketItem ->
-                            val product = productMap[ticketItem.productCode] ?: Product(
-                                code = ticketItem.productCode ?: "",
-                                name = ticketItem.productName,
-                                price = ticketItem.unitPrice,
-                                department = "Desconocido",
-                                unit = if (ticketItem.quantity % 1.0 != 0.0) ProductUnit.GRANEL else ProductUnit.UNIDAD
-                            )
-                            CartItem(product = product, quantity = ticketItem.quantity, estimatedPieces = ticketItem.estimatedPieces)
-                        }
+                        val cartItems = lastTicketWithItems.items.map { it.toCartItem() }
                         withContext(Dispatchers.IO) {
                             val result = printerHelper.printTicket(lastTicketWithItems.ticket, cartItems, lastTicketWithItems.ticket.dailyFolio.toString().padStart(3, '0'))
                             _printResult.value = result

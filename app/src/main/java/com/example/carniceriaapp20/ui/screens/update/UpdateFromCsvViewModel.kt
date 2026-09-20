@@ -5,7 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.carniceriaapp20.data.local.Product
 import com.example.carniceriaapp20.data.local.ProductUnit
 import com.example.carniceriaapp20.data.repository.ProductRepository
+import com.example.carniceriaapp20.util.AppLog
 import com.example.carniceriaapp20.util.ReportExporter
+import com.example.carniceriaapp20.util.normalizeDepartment
+import com.example.carniceriaapp20.util.parseDecimal
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,9 +81,14 @@ class UpdateFromCsvViewModel @Inject constructor(
                 val isExternalFormat = header.contains("producto") && header.contains("departamento")
 
                 val products = LinkedHashMap<String, Product>()
+                val departments = mutableListOf<String>() // escrituras ya vistas: la primera gana
                 var skipped = 0
                 lines.drop(1).filter { it.isNotBlank() }.forEach { line ->
-                    val product = parseProduct(splitCsv(line), isExportFormat, isExternalFormat)
+                    val product = parseProduct(splitCsv(line), isExportFormat, isExternalFormat)?.let {
+                        val department = normalizeDepartment(it.department, departments)
+                        if (department !in departments) departments.add(department)
+                        it.copy(department = department)
+                    }
                     // Línea inválida, o código repetido (gana la última): se cuentan como omitidas.
                     if (product == null || products.put(product.code, product) != null) skipped++
                 }
@@ -94,6 +102,7 @@ class UpdateFromCsvViewModel @Inject constructor(
                 _uiState.value = UpdateUiState(result = UpdateResult.Success(products.size, skipped))
 
             } catch (e: Exception) {
+                AppLog.e("CsvImport", "Fallo al importar el catálogo", e)
                 _uiState.value = UpdateUiState(result = UpdateResult.Error("Error: ${e.message}. El catálogo no se modificó."))
             }
         }
@@ -108,14 +117,19 @@ class UpdateFromCsvViewModel @Inject constructor(
                     name = tokens[1].trim(),
                     price = tokens[2].trim().toDouble(),
                     department = tokens[3].trim(),
-                    unit = ProductUnit.valueOf(tokens[4].trim().uppercase())
+                    unit = ProductUnit.valueOf(tokens[4].trim().uppercase()),
+                    stock = tokens.getOrNull(5)?.let(::parseDecimal),
+                    minStock = tokens.getOrNull(6)?.let(::parseDecimal) ?: 0.0
                 )
                 isExternalFormat && tokens.size >= 11 -> Product(
                     code = tokens[1].trim(),
                     name = tokens[2].trim(),
                     price = tokens[4].replace("$", "").replace(",", "").trim().toDouble(),
                     department = tokens[6].trim(),
-                    unit = if (tokens[10].trim().equals("GRANEL", ignoreCase = true)) ProductUnit.GRANEL else ProductUnit.UNIDAD
+                    unit = if (tokens[10].trim().equals("GRANEL", ignoreCase = true)) ProductUnit.GRANEL else ProductUnit.UNIDAD,
+                    // Existencia (col. 7) e Inv. mínimo (col. 8); aquí la coma es separador de miles ("1,785").
+                    stock = tokens[7].replace(",", "").let(::parseDecimal),
+                    minStock = tokens[8].replace(",", "").let(::parseDecimal) ?: 0.0
                 )
                 else -> null
             }?.takeIf { it.code.isNotBlank() }

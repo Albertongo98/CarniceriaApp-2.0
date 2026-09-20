@@ -1,5 +1,7 @@
 package com.example.carniceriaapp20.ui.screens.products
 
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import com.example.carniceriaapp20.util.formatMoney2
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,9 +9,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,6 +23,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.carniceriaapp20.data.local.Product
+import com.example.carniceriaapp20.data.local.ProductUnit
+import com.example.carniceriaapp20.data.local.isLowStock
+import com.example.carniceriaapp20.ui.composables.rememberPinGate
+import com.example.carniceriaapp20.util.formatPlain
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,14 +39,27 @@ fun ProductListScreen(
     val products by viewModel.products.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     var showDialog by remember { mutableStateOf<Product?>(null) }
+    val lowStockOnly by viewModel.lowStockOnly.collectAsState()
+    val lowStockCount by viewModel.lowStockCount.collectAsState()
+    val pinGate = rememberPinGate()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val message by viewModel.message.collectAsState()
+
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.onMessageConsumed()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Gestión de Productos", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -96,7 +115,27 @@ fun ProductListScreen(
                 )
             }
 
-            if (products.isEmpty() && searchQuery.isNotEmpty()) {
+            if (lowStockCount > 0 || lowStockOnly) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilterChip(
+                        selected = lowStockOnly,
+                        onClick = viewModel::toggleLowStockOnly,
+                        label = { Text("Bajo inventario ($lowStockCount)") }
+                    )
+                    AssistChip(
+                        onClick = viewModel::printRestockList,
+                        label = { Text("Imprimir lista de resurtido") },
+                        leadingIcon = { Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        enabled = lowStockCount > 0
+                    )
+                }
+            }
+
+            if (products.isEmpty() && (searchQuery.isNotEmpty() || lowStockOnly)) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No se encontraron productos", color = MaterialTheme.colorScheme.outline)
                 }
@@ -118,6 +157,8 @@ fun ProductListScreen(
         }
     }
 
+    pinGate.Dialog()
+
     // El Diálogo de eliminación se mantiene funcional pero con colores de alerta
     showDialog?.let { productToDelete ->
         AlertDialog(
@@ -127,7 +168,7 @@ fun ProductListScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.deleteProduct(productToDelete)
+                        pinGate.require { viewModel.deleteProduct(productToDelete) }
                         showDialog = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -202,10 +243,20 @@ fun ProductListItem(
                         color = MaterialTheme.colorScheme.outline
                     )
                 }
+                product.stock?.let { stock ->
+                    val unit = if (product.unit == ProductUnit.GRANEL) "kg" else "pz"
+                    Text(
+                        text = "Existencia: ${formatPlain(stock)} $unit" + if (product.isLowStock) "  ·  BAJO INVENTARIO" else "",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (product.isLowStock) FontWeight.Bold else FontWeight.Normal,
+                        color = if (product.isLowStock) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
             
             Text(
-                text = "$" + "%.2f".format(product.price), 
+                text = "$" + formatMoney2(product.price), 
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Black,
                 color = Color(0xFF1B5E20) // Verde bosque marca
